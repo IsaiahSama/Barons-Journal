@@ -15,7 +15,7 @@ from ..data import (
     latest_save,
     load_save,
 )
-from ..journal import Journal
+from ..journal import Journal, JournalError, Run, ScrollProgress
 from .location import Location
 from .settings import AppSettings
 from .state import Banner, ViewState
@@ -48,6 +48,9 @@ class SessionController(QObject):
         self._view: ViewState = self._live_view
         """What is on screen."""
         self._shown = False
+        self._past_run: Run | None = None
+        """The past run on screen, if any."""
+        self._new_run = False
         self._banner: Banner | None = None
 
         self._loaded_path: Path | None = None
@@ -97,6 +100,77 @@ class SessionController(QObject):
         self._settings.follow = path
         self._follow_changed()
 
+    # -- live and past runs ------------------------------------------------
+
+    def live_gamekey(self) -> int | None:
+        run = self._live_view.run
+        return run.gamekey if run is not None else None
+
+    def open_run(self, gamekey: int) -> None:
+        """Show a past run read-only; the live run's key goes back to live."""
+        if gamekey == self.live_gamekey():
+            self.back_to_live()
+            return
+        run = self._journal.run(gamekey)
+        if run is None:
+            raise ValueError(f"No such run: {gamekey}")
+        self._past_run = run
+        self._show(ViewState("past", run, None, Location.of_run(run), editable=False))
+        self._update_banner()
+
+    def back_to_live(self) -> None:
+        self._past_run = None
+        self._new_run = False
+        self._show(self._live_view)
+        self._update_banner()
+
+    def delete_run(self, gamekey: int) -> None:
+        if gamekey == self.live_gamekey():
+            raise ValueError("The live run can't be deleted")
+        self._journal.delete_run(gamekey)
+        if self._past_run is not None and self._past_run.gamekey == gamekey:
+            self.back_to_live()
+
+    # -- journal data ------------------------------------------------------
+
+    def _check_writable(self, gamekey: int) -> None:
+        if gamekey != self.live_gamekey():
+            raise JournalError("Past runs are read-only")
+
+    def run_note(self, gamekey: int) -> str:
+        return self._journal.run_note(gamekey)
+
+    def save_run_note(self, gamekey: int, body: str) -> None:
+        self._check_writable(gamekey)
+        self._journal.set_run_note(gamekey, body)
+
+    def floor_note(self, gamekey: int, loc: Location) -> str:
+        return self._journal.floor_note(gamekey, loc.dungeon_lvl, secret=loc.secret)
+
+    def save_floor_note(self, gamekey: int, loc: Location, body: str) -> None:
+        self._check_writable(gamekey)
+        self._journal.set_floor_note(gamekey, loc.dungeon_lvl, body, secret=loc.secret)
+        self.floor_note_changed.emit(gamekey, loc.dungeon_lvl, loc.secret)
+
+    def floor_notes(self, gamekey: int) -> dict[Location, str]:
+        return {
+            Location(lvl, secret): body
+            for (lvl, secret), body in self._journal.floor_notes(gamekey).items()
+        }
+
+    def scroll_progress(self, gamekey: int) -> ScrollProgress:
+        return self._journal.scroll_progress(gamekey)
+
+    def identify_scroll(self, gamekey: int, label: str, item_id: int) -> None:
+        self._check_writable(gamekey)
+        self._journal.identify_scroll(gamekey, label, item_id)
+        self.scrolls_changed.emit(gamekey)
+
+    def forget_scroll(self, gamekey: int, label: str) -> None:
+        self._check_writable(gamekey)
+        self._journal.forget_scroll(gamekey, label)
+        self.scrolls_changed.emit(gamekey)
+
     def reload(self) -> None:
         """One load attempt for the followed save."""
         path = self._resolve()
@@ -123,10 +197,10 @@ class SessionController(QObject):
         self._retry.stop()
         self._retries = 0
         self._error = None
+        self._live_view = ViewState("empty")  # a failure on the new target must not reuse the old run
         path = self._resolve()
         if path is None:
-            self._live_view = ViewState("empty")
-            self._show(self._live_view)
+            self._show_live()
             self._update_banner()
             self._sync_watches()
         else:
@@ -146,6 +220,7 @@ class SessionController(QObject):
     # -- outcomes ----------------------------------------------------------
 
     def _loaded(self, path: Path, mtime: datetime, save) -> None:
+        before = self.live_gamekey()
         self._journal.record_run(save)
         run = self._journal.run(save.gamekey)
         self._loaded_path = path
@@ -156,6 +231,8 @@ class SessionController(QObject):
         self._live_view = ViewState(
             "live", run, save, Location.of_save(save), editable=True
         )
+        if self._past_run is not None and before is not None and before != save.gamekey:
+            self._new_run = True
         self._show_live()
         self._update_banner()
 
@@ -177,19 +254,22 @@ class SessionController(QObject):
                 ended=True,
             )
             self._show_live()
+        if self._live_view.mode == "empty":
+            self._show_live()  # nothing to keep: panels show the empty state
         self._update_banner()
 
     def _finish_without_save(self) -> None:
         if self._live_view.mode == "empty":
-            self._show(self._live_view)
+            self._show_live()
         self._update_banner()
         self._sync_watches()
 
     # -- view and banner ---------------------------------------------------
 
     def _show_live(self) -> None:
-        """Put the live view on screen (Task 5: unless a past run is shown)."""
-        self._show(self._live_view)
+        """Put the live view on screen, unless a past run is shown."""
+        if self._past_run is None:
+            self._show(self._live_view)
 
     def _show(self, view: ViewState) -> None:
         if view == self._view and self._shown:
@@ -200,12 +280,16 @@ class SessionController(QObject):
         self.view_changed.emit(view)
 
     def _update_banner(self) -> None:
-        """The only place the banner is computed. Priority: error > ended."""
+        """The only place the banner is computed. Priority: error > new_run > ended > past."""
         banner: Banner | None = None
         if self._error is not None:
             banner = Banner("error", self._error)
+        elif self._new_run:
+            banner = Banner("new_run", "New run detected.")
         elif self._live_view.ended:
             banner = Banner("ended", "Save no longer found: this run may have ended.")
+        elif self._past_run is not None:
+            banner = Banner("past", "Viewing a past run.")
         if banner != self._banner:
             self._banner = banner
             self.banner_changed.emit(banner)
@@ -214,11 +298,12 @@ class SessionController(QObject):
 
     def _sync_watches(self) -> None:
         wanted: set[str] = set()
-        target = self._loaded_path or self._settings.follow
+        target = self._resolve()
         if target is not None:
             wanted.add(str(target))
             wanted.add(str(target.parent))
         wanted.update(str(d) for d in self.save_dirs())
+        wanted.update(str(slot.path) for slot in self.saves())
         wanted = {p for p in wanted if Path(p).exists()}
         current = set(self._watcher.files()) | set(self._watcher.directories())
         stale = list(current - wanted)

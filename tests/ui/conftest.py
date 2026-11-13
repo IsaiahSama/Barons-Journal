@@ -119,3 +119,16 @@ def empty_dir_controller(journal, settings, tmp_path, monkeypatch):
     empty.mkdir()
     settings.save_dir = empty
     return SessionController(journal, settings)
+
+
+@pytest.fixture
+def controller_with_two_runs(controller, journal, sample_save_path):
+    """The live run (sample save) plus an older run, gamekey 42, in the journal. Not started."""
+    import dataclasses
+    from datetime import timedelta
+
+    sample = load_save(sample_save_path)
+    journal.record_run(
+        dataclasses.replace(sample, gamekey=42, timestamp=sample.timestamp - timedelta(days=3))
+    )
+    return controller
