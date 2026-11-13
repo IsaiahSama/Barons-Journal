@@ -144,3 +144,23 @@ def test_secret_level_note_separate_in_panel(notes_panel, controller, raw_save, 
     assert notes_panel.showing_location() == Location(3, True)
     assert notes_panel.floor_title.text() == "Gnomish Mines · depth 3 notes"
     assert notes_panel.floor_editor.toPlainText() == ""
+
+
+def test_same_floor_view_change_keeps_text_and_cursor(
+    notes_panel, controller, raw_save, monkeypatch
+):
+    monkeypatch.setattr(notes_panel, "_floor_editor_active", lambda: True)
+    floor, run = notes_panel.floor_editor, notes_panel.run_editor
+    QTest.keyClicks(floor, "floor text")
+    QTest.keyClicks(run, "run text")
+    cursor = run.textCursor()
+    cursor.setPosition(3)
+    run.setTextCursor(cursor)
+    before = (floor.toPlainText(), floor.textCursor().position(), run.textCursor().position())
+    raw_save["gold"] = 1
+    raw_save["players"][0]["stats"]["GOLD"] = 12345
+    _go_to(controller, raw_save, 0)
+    after = (floor.toPlainText(), floor.textCursor().position(), run.textCursor().position())
+    assert after == before
+    assert run.toPlainText() == "run text"
+    assert not notes_panel.switch_prompt.isVisible()

@@ -67,6 +67,15 @@ class NotesPanel(QWidget):
             and view.run is not None
             and (view.run.gamekey, view.mode) == self._bound_run[:2]
         )
+        if same_run and view.location == self._showing:
+            # Same run, mode and floor: never reload text under the user's cursor.
+            self._pending = None
+            self.switch_prompt.hide()
+            if view.editable != self._bound_run[2]:
+                self._bound_run = (*self._bound_run[:2], view.editable)
+                self.floor_editor.setReadOnly(not view.editable)
+                self.run_editor.setReadOnly(not view.editable)
+            return
         if (
             same_run
             and view.location != self._showing
