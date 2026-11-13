@@ -1,2 +1,4 @@
 def main() -> None:
-    print("Hello from barons-journal!")
+    from . import ui  # lazy: keeps Qt out of the non-UI packages' import path
+
+    raise SystemExit(ui.run())
