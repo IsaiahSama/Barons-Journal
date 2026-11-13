@@ -230,3 +230,43 @@ def test_first_load_failure_emits_empty_view(controller, qtbot, save_dir):
     controller.view_changed.connect(views.append)
     controller.start()
     assert [v.mode for v in views] == ["empty"]
+
+
+# -- review fixes ---------------------------------------------------------
+
+
+def test_flush_on_about_to_change_saves_old_run_on_live_switch(
+    controller, qtbot, save_dir, raw_save
+):
+    controller.start()
+    controller.about_to_change.connect(lambda: controller.save_run_note(LIVE, "typed"))
+    seen = []
+    controller.about_to_change.connect(lambda: seen.append(controller.view().run.gamekey))
+    _new_run(save_dir, raw_save)
+    qtbot.waitUntil(lambda: controller.view().run.gamekey == 99, timeout=3000)
+    assert controller.run_note(LIVE) == "typed"
+    assert seen[-1] == LIVE
+
+
+def test_flush_on_about_to_change_saves_old_run_on_follow_path(
+    controller, save_dir, raw_save
+):
+    controller.start()
+    raw_save["gamekey"] = 42
+    other = _write(save_dir, raw_save, "savegame5.baronysave")
+    controller.about_to_change.connect(lambda: controller.save_run_note(LIVE, "typed"))
+    controller.follow_path(other)
+    assert controller.view().run.gamekey == 42
+    assert controller.run_note(LIVE) == "typed"
+
+
+def test_past_banner_outranks_ended(controller_with_two_runs, qtbot, save_dir):
+    c = controller_with_two_runs
+    c.start()
+    (save_dir / "savegame0.baronysave").unlink()
+    qtbot.waitUntil(lambda: c.view().ended, timeout=3000)
+    assert c.banner().kind == "ended"
+    c.open_run(42)
+    assert c.banner().kind == "past"
+    c.back_to_live()
+    assert c.banner().kind == "ended"

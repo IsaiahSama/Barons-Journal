@@ -48,6 +48,9 @@ class SessionController(QObject):
         self._view: ViewState = self._live_view
         """What is on screen."""
         self._shown = False
+        self._writable_key: int | None = None
+        """The run that may be written. It follows the live run only after
+        about_to_change was emitted, so editors can still flush the old run."""
         self._past_run: Run | None = None
         """The past run on screen, if any."""
         self._new_run = False
@@ -134,7 +137,7 @@ class SessionController(QObject):
     # -- journal data ------------------------------------------------------
 
     def _check_writable(self, gamekey: int) -> None:
-        if gamekey != self.live_gamekey():
+        if gamekey != self._writable_key:
             raise JournalError("Past runs are read-only")
 
     def run_note(self, gamekey: int) -> str:
@@ -270,26 +273,27 @@ class SessionController(QObject):
         """Put the live view on screen, unless a past run is shown."""
         if self._past_run is None:
             self._show(self._live_view)
+        self._writable_key = self.live_gamekey()
 
     def _show(self, view: ViewState) -> None:
         if view == self._view and self._shown:
             return
+        self.about_to_change.emit()
         self._view = view
         self._shown = True
-        self.about_to_change.emit()
         self.view_changed.emit(view)
 
     def _update_banner(self) -> None:
-        """The only place the banner is computed. Priority: error > new_run > ended > past."""
+        """The only place the banner is computed. Priority: error > new_run > past > ended."""
         banner: Banner | None = None
         if self._error is not None:
             banner = Banner("error", self._error)
         elif self._new_run:
             banner = Banner("new_run", "New run detected.")
-        elif self._live_view.ended:
-            banner = Banner("ended", "Save no longer found: this run may have ended.")
         elif self._past_run is not None:
             banner = Banner("past", "Viewing a past run.")
+        elif self._live_view.ended:
+            banner = Banner("ended", "Save no longer found: this run may have ended.")
         if banner != self._banner:
             self._banner = banner
             self.banner_changed.emit(banner)

@@ -106,7 +106,12 @@ def controller(journal, settings, save_dir, monkeypatch):
     monkeypatch.setattr(SessionController, "DEBOUNCE_MS", 10)
     monkeypatch.setattr(SessionController, "RETRY_MS", 20)
     settings.save_dir = save_dir
-    return SessionController(journal, settings)
+    c = SessionController(journal, settings)
+    yield c
+    # Stop pending reloads so they can't fire after the journal is closed.
+    c._debounce.stop()
+    c._retry.stop()
+    c._watcher.removePaths(c._watcher.files() + c._watcher.directories())
 
 
 @pytest.fixture
