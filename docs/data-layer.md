@@ -365,7 +365,7 @@ Saving an empty string deletes the note. Use `save.dungeon_lvl` for the current 
 
 These are known gaps the UI work will run into. They're not bugs.
 
-- **Watching the save (UI's job).** Nothing refreshes when Barony writes a new save; this is for the UI to build with Qt. Watch the save with `QFileSystemWatcher`, adding both the file and its folder: if Barony replaces the file instead of writing to it, the watch on the file is dropped. On change: `load_save` → `journal.record_run(save)` → refresh the views. If the read fails with `InvalidSaveError` (e.g. the file was caught mid-write), keep the last good data and retry shortly after with a `QTimer`. Use `find_saves()` again when the folder changes, to notice a new slot.
+- **Watching the save.** Built in `ui/controller.py` (`SessionController`): it watches the save file and its folder with `QFileSystemWatcher`, then runs `load_save` → `journal.record_run(save)` → refresh the views. A failed read (`InvalidSaveError`, e.g. mid-write) keeps the last good data and retries shortly after with a `QTimer`. It calls `find_saves()` again when the folder changes, to notice a new slot.
 - **Labels on inventory scrolls.** By design (see "How labels work"), the player enters labels by hand.
 - **Hotbar.** `player.hotbar` holds raw values that look like inventory indices, but this isn't confirmed or resolved to `Item`s.
 - **Inventory grid positions** (`x`/`y` in the save) aren't parsed.
@@ -377,7 +377,7 @@ These are known gaps the UI work will run into. They're not bugs.
 
 ```
 uv sync                      # install dependencies
-uv run barons-journal        # run the app (main() is still a stub)
+uv run barons-journal        # run the app
 uv run pytest                # full test suite
 ```
 

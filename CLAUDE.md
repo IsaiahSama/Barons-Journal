@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Baron's Journal is a native desktop companion app for the game Barony (Python 3.13+, managed with uv). Planned features (from README): read-only stats for the current run, pulled from the save file; scratchpad notes per run and per floor; floor reference info (secret levels, artifacts); and potion recipes.
 
-**Status:** the non-UI layers are done and tested: save discovery and parsing (`data`), ID-to-name tables (`data.ids`), reference data for scrolls, alchemy, and floors (`reference`), and the user's SQLite journal (`journal`). **The UI isn't built yet.** `main()` in `src/barons_journal/__init__.py` is still a stub. Design notes are in `plans/` (gitignored, local only).
+**Status:** the non-UI layers are done and tested: save discovery and parsing (`data`), ID-to-name tables (`data.ids`), reference data for scrolls, alchemy, and floors (`reference`), and the user's SQLite journal (`journal`). The PySide6 UI is built (`ui`); `main()` in `src/barons_journal/__init__.py` calls `ui.run()`. Design notes are in `plans/` (gitignored, local only).
 
 ## Commands
 
@@ -17,16 +17,18 @@ uv run pytest                # run the tests (pytest is a dev dependency)
 uv run pytest tests/data/test_saves.py::TestFindSaves   # run one file or test
 ```
 
-The README's `uv run main.py` is outdated: there is no `main.py`.
+## UI (`src/barons_journal/ui/`)
 
-## Building the UI
+**Read `docs/data-layer.md` first.** It covers the public API of the data, reference, and journal packages, and the rules the UI must follow (spoilers, `record_run`, threading). Toolkit: PySide6 (Qt 6). Only `ui` may import Qt; `data`, `reference`, and `journal` must not.
 
-**Read `docs/data-layer.md` first.** It covers the public API of the data, reference, and journal packages, and the rules the UI must follow (spoilers, `record_run`, threading).
-
-- **Toolkit: PySide6 (Qt 6).** It's already a dependency. Put UI code in its own package (e.g. `src/barons_journal/ui/`) and keep it out of `data`, `reference`, and `journal`, which must not import Qt.
-- **Finding the save is done:** `barons_journal.data.find_saves()` / `latest_save()` (see the doc). On Windows the saves live in the game's install folder, so the UI should let the user pick the folder when none is found.
-- **Watching the save belongs to the UI.** Use Qt's `QFileSystemWatcher` on the save file (and its folder: Barony may replace the file rather than write to it in place, which drops the watch on the file). On change: `load_save` → `journal.record_run(save)` → refresh the views. A save can be read mid-write, so catch `InvalidSaveError`, keep showing the last good data, and retry shortly after (e.g. with a `QTimer`).
-- **Threading:** parsing a save takes milliseconds, so the main thread is fine. If you move work to a worker thread, keep every `Journal` call on the thread that opened it (see the doc).
+- `__init__.py`: `run()` builds the `QApplication`, `AppSettings`, `Journal`, `SessionController` and `MainWindow`.
+- `controller.py`: `SessionController` owns the session. It finds saves, watches the followed save and its folder (`QFileSystemWatcher`, debounced), and on change runs `load_save` → `journal.record_run(save)` → emits `view_changed(ViewState)`. A save read mid-write (`InvalidSaveError`) keeps the last good data and retries on a `QTimer`. It also handles past runs (read-only), notes, and scroll identification. Every `Journal` call stays on the main thread.
+- `state.py`: `ViewState`, the immutable snapshot panels render. `location.py`: `Location(dungeon_lvl, secret)` and its wording. `settings.py`: `AppSettings` (QSettings: layout, save folder, followed save, geometry, splitter sizes, panel visibility).
+- `layouts.py`: `Panels` and `LayoutManager` build the Focus layout (character | tabs: Backpack, Floors, Alchemy, Scrolls, Kills | notes) and the Dashboard layout from the same panel instances. `main_window.py`: menus (File, Runs, View), run header, empty state, close handling (flushes notes).
+- `panels/`: `header`, `character`, `notes` (run note and current-floor note), `backpack`, `kills`, `floors` (table plus per-floor note, secret levels included), `alchemy`, `scrolls`; `_stats.py` holds shared bases for the table panels.
+- `widgets/note_editor.py`: `NoteEditor`, a plain-text editor that saves on a timer, on focus out, and on `flush()`. `dialogs/`: `runs_browser` (past runs) and `slot_picker` (which save slot to follow).
+- Tests are in `tests/ui/` and run on the offscreen Qt platform.
+- On Windows the saves live in the game's install folder, so the UI lets the user pick the folder when none is found.
 
 ## Architecture
 

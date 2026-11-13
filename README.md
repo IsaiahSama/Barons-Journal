@@ -17,7 +17,7 @@ git clone https://github.com/IsaiahSama/Barons-Journal
 cd barons-journal
 uv venv .venv
 uv sync
-uv run main.py
+uv run barons-journal
 ```
 
 ## Features
@@ -25,7 +25,10 @@ uv run main.py
 - Displays read only statistics of the current run including:
     - Character name, race, class, level, health, mana, stats, skills
     - Dungeon level, gold, kills, learnt spells, and inventory
-- Scratchpad for quick note taking, for the entire run, and for a specific floor.
+- Scratchpad for quick note taking, for the entire run, and for a specific floor (including secret levels).
+- Scroll identification: record which unidentified scroll label is which scroll, with the remaining possibilities worked out for you
+- Browse past runs and their notes, and pick which save slot to follow
+- Two switchable layouts (Focus and Dashboard)
 - Floor information, such as which floor has secret levels, and what artifacts are present
 - Potion recipes
 
