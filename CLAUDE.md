@@ -19,6 +19,8 @@ The README's `uv run main.py` is outdated: there is no `main.py`. pytest isn't a
 
 ## Architecture
 
+**Building the UI?** Read `docs/data-layer.md` first. It covers the public API of the data, reference, and journal packages, plus the rules the UI must follow (spoilers, `record_run`, threading).
+
 - **Package layout:** src-layout, built with the `uv_build` backend. Code lives in `src/barons_journal/`.
 - **Save parsing (`barons_journal.data`):** Barony's save files are **JSON**. The game writes them as `savegameN.baronysave` in `~/.barony/savegames/` on Linux (the sample in `tests/` is named `.baronsave`). Validate with `magic_cookie == "BARONYJSONSAVE"` and check `game_version`. `tests/save_file_example.baronsave` is a real save to develop and test against. The plan is to keep all raw-dict handling and quirk cleanup inside `data` and give the UI typed models only (`SaveFile`, `Player`, `Stats`, ...).
 - **Where the data is:** the local player is `players[player_num]`. Most stats are under `players[n].stats` (`HP`/`maxHP`, `MP`/`maxMP`, `STR`/`DEX`/`CON`/`INT`/`PER`/`CHR`, `LVL`, `GOLD`, `PROFICIENCIES`). `stats.player_equipment` maps slot names to **indices into `stats.inventory`** (local player only; other players use `npc_equipment`). Learned spells are inventory items of type `SPELL_ITEM` (162) whose `appearance` is the spell ID. `EFFECTS`/`EFFECTS_TIMERS` have 160 slots (only 0-134 are defined); timers are in ticks, 50 per second. `gamekey` stays the same for the whole run, so it's the key for run notes; floor notes use `(gamekey, dungeon_lvl)`.
