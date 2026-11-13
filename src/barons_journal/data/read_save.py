@@ -8,6 +8,7 @@ All raw-dict handling and save-format quirks live here:
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from .models import Effect, Equipment, Item, Player, SaveFile, Stats
 MAGIC_COOKIE = "BARONYJSONSAVE"
 SUPPORTED_VERSIONS = frozenset({502})
 UINT32_EMPTY = 4294967295
+TIMESTAMP_FORMAT = "%Y-%m-%d %H-%M-%S"  # e.g. "2026-10-12 13-08-18", local time
 
 
 class InvalidSaveError(ValueError):
@@ -64,7 +66,7 @@ def parse_save(raw: Any) -> SaveFile:
         game_name=_clean_name(_require(raw, "game_name")),
         gamekey=_require(raw, "gamekey"),
         dungeon_lvl=_require(raw, "dungeon_lvl"),
-        timestamp=_require(raw, "timestamp"),
+        timestamp=_parse_timestamp(_require(raw, "timestamp")),
         player=_parse_player(players[player_num]),
     )
 
@@ -161,6 +163,13 @@ def _require(raw: dict, key: str) -> Any:
         return raw[key]
     except KeyError:
         raise InvalidSaveError(f"Save is missing required field {key!r}") from None
+
+
+def _parse_timestamp(value: str) -> datetime:
+    try:
+        return datetime.strptime(value, TIMESTAMP_FORMAT)
+    except (TypeError, ValueError):
+        raise InvalidSaveError(f"Bad timestamp {value!r}; expected format {TIMESTAMP_FORMAT!r}") from None
 
 
 def _clean_name(name: str) -> str:

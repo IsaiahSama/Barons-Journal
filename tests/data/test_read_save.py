@@ -1,5 +1,7 @@
 """Tests for loading and parsing Barony .baronsave files."""
 
+from datetime import datetime
+
 import pytest
 
 from barons_journal.data import (
@@ -27,7 +29,7 @@ class TestSampleSave:
         assert save.game_name == "Moonshine"
         assert save.gamekey == 1791824898
         assert save.dungeon_lvl == 0
-        assert save.timestamp == "2026-10-12 13-08-18"
+        assert save.timestamp == datetime(2026, 10, 12, 13, 8, 18)
 
     def test_local_player_identity(self, save):
         player = save.player
@@ -134,6 +136,11 @@ class TestValidation:
     def test_missing_required_field(self, raw_save):
         del raw_save["players"][0]["stats"]["HP"]
         with pytest.raises(InvalidSaveError, match="HP"):
+            parse_save(raw_save)
+
+    def test_malformed_timestamp(self, raw_save):
+        raw_save["timestamp"] = "yesterday"
+        with pytest.raises(InvalidSaveError, match="timestamp"):
             parse_save(raw_save)
 
     def test_player_num_out_of_range(self, raw_save):

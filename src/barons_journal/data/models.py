@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from dataclasses import dataclass, fields
+from datetime import datetime
 
 from .ids import (
     CLASSES,
@@ -157,6 +158,7 @@ class SaveFile:
     game_name: str
     gamekey: int
     dungeon_lvl: int
-    timestamp: str
+    timestamp: datetime
+    """When Barony wrote the save, in local time (no timezone)."""
     player: Player
     """The local player (``players[player_num]`` in the raw save)."""
