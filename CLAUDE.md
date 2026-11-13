@@ -26,6 +26,6 @@ The README's `uv run main.py` is outdated: there is no `main.py`. pytest isn't a
   - The player object has a duplicate `"race"` key. Python's `json` keeps the last one.
   - Names end in `\r` (`game_name`, `stats.name`). Strip them.
   - `4294967295` (uint32 -1) means empty or none.
-  - Class, race, kills, proficiencies, items, and spells are numeric IDs. Map them to names with lookup tables taken from the Barony source (`TurningWheel/Barony` on GitHub).
+  - Class, race, kills, proficiencies, items, and spells are numeric IDs (list positions in Barony's C++ enums). `barons_journal.data.ids` maps them to in-game names from `ids.json`. Don't hand-edit that file: regenerate it with `scripts/build_id_tables.py <Barony checkout>`, which reads the enums and `lang/` files from `TurningWheel/Barony`. The Barony Save Editor (Groshie) is a useful cross-reference, but its spell list is missing `SPELL_DUCK_DIVE` (218), so spells from 218 on are shifted by one.
 - **Save timing:** Barony writes the save on floor transitions, not continuously, so the stats view is always a snapshot.
 - **Data kept apart:** user notes go in the app's own storage, never in game files. Static reference data (floors, potion recipes) ships as curated JSON, separate from the save parser.

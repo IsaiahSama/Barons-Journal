@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from .ids import CLASSES, MONSTERS, PROFICIENCIES, RACES
+
 
 @dataclass(frozen=True, slots=True)
 class Stats:
@@ -21,6 +23,11 @@ class Stats:
     hunger: int
     proficiencies: tuple[int, ...]
 
+    @property
+    def proficiencies_by_name(self) -> dict[str, int]:
+        """Skill name -> level (0-100), in the game's skill order."""
+        return {PROFICIENCIES.label(i): level for i, level in enumerate(self.proficiencies)}
+
 
 @dataclass(frozen=True, slots=True)
 class Player:
@@ -30,6 +37,19 @@ class Player:
     stats: Stats
     kills: tuple[int, ...]
     hotbar: tuple[int | None, ...]
+
+    @property
+    def class_name(self) -> str:
+        return CLASSES.label(self.char_class)
+
+    @property
+    def race_name(self) -> str:
+        return RACES.label(self.race)
+
+    @property
+    def kills_by_monster(self) -> dict[str, int]:
+        """Monster name -> kill count, for monsters killed at least once."""
+        return {MONSTERS.label(i): n for i, n in enumerate(self.kills) if n}
 
 
 @dataclass(frozen=True, slots=True)
