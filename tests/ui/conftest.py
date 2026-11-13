@@ -99,6 +99,15 @@ def journal(journal_path):
     j.close()
 
 
+def _stop_controller(c) -> None:
+    """Stop pending reloads so they can't fire after the journal is closed."""
+    c._debounce.stop()
+    c._retry.stop()
+    paths = c._watcher.files() + c._watcher.directories()
+    if paths:
+        c._watcher.removePaths(paths)
+
+
 @pytest.fixture
 def controller(journal, settings, save_dir, monkeypatch):
     from barons_journal.ui.controller import SessionController
@@ -108,10 +117,7 @@ def controller(journal, settings, save_dir, monkeypatch):
     settings.save_dir = save_dir
     c = SessionController(journal, settings)
     yield c
-    # Stop pending reloads so they can't fire after the journal is closed.
-    c._debounce.stop()
-    c._retry.stop()
-    c._watcher.removePaths(c._watcher.files() + c._watcher.directories())
+    _stop_controller(c)
 
 
 @pytest.fixture
@@ -123,7 +129,9 @@ def empty_dir_controller(journal, settings, tmp_path, monkeypatch):
     empty = tmp_path / "empty"
     empty.mkdir()
     settings.save_dir = empty
-    return SessionController(journal, settings)
+    c = SessionController(journal, settings)
+    yield c
+    _stop_controller(c)
 
 
 @pytest.fixture
