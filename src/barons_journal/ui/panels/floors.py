@@ -8,6 +8,7 @@ from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelInd
 from PySide6.QtGui import QBrush, QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QHeaderView,
     QLabel,
     QTableView,
     QVBoxLayout,
@@ -132,6 +133,8 @@ class FloorsPanel(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().hide()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setStretchLastSection(True)
         self.treasures = QLabel()
         self.treasures.setWordWrap(True)
         self.note_editor = NoteEditor()

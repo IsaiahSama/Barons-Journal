@@ -150,3 +150,27 @@ def test_blessing_text(qtbot, controller, sample_save_path):
     panel = _panel(qtbot, controller, BackpackPanel, _with_player(base, inventory=items))
     model = panel.table.model()
     assert [model.index(r, 3).data() for r in range(3)] == ["+2 blessed", "-1 cursed", "uncursed"]
+
+
+def test_backpack_item_column_stretches(qtbot, controller):
+    from PySide6.QtWidgets import QHeaderView
+
+    from barons_journal.ui.panels.backpack import BackpackPanel
+
+    controller.start()
+    panel = BackpackPanel(controller)
+    qtbot.addWidget(panel)
+    header = panel.table.horizontalHeader()
+    assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert header.sectionResizeMode(3) == QHeaderView.ResizeMode.ResizeToContents
+
+
+def test_backpack_hides_spells_when_none(qtbot, controller):
+    from barons_journal.ui.panels.backpack import BackpackPanel
+
+    controller.start()
+    panel = BackpackPanel(controller)
+    qtbot.addWidget(panel)
+    panel.show()
+    has = panel.spells.count() > 0
+    assert panel.spells.isVisible() == has and panel.spells_label.isVisible() == has

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QHeaderView,
     QLabel,
     QListWidget,
     QTableView,
@@ -65,16 +66,19 @@ class BackpackPanel(StatsPanel):
         self.table = QTableView()
         self.table.setModel(self.model)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.empty_label = QLabel("Backpack is empty")
         self.spells = QListWidget()
+        self.spells_label = QLabel("Spells")
 
         content = QWidget()
         inner = QVBoxLayout(content)
-        inner.addWidget(self.table)
+        inner.addWidget(self.table, 3)
         inner.addWidget(self.empty_label)
-        inner.addWidget(QLabel("Spells"))
-        inner.addWidget(self.spells)
+        inner.addWidget(self.spells_label)
+        inner.addWidget(self.spells, 1)
 
         self._init_stack(content)
 
@@ -85,4 +89,7 @@ class BackpackPanel(StatsPanel):
         self.empty_label.setVisible(not rows)
         self.table.setVisible(bool(rows))
         self.spells.clear()
-        self.spells.addItems([i.name for i in inventory if i.is_spell])
+        names = [i.name for i in inventory if i.is_spell]
+        self.spells.addItems(names)
+        self.spells.setVisible(bool(names))
+        self.spells_label.setVisible(bool(names))

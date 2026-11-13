@@ -47,6 +47,8 @@ class Panels:
 
 _FOCUS_RATIO = [1000, 2500, 1100]
 _DASHBOARD_RATIO = [1000, 1000, 1000]
+_DASHBOARD_LEFT_RATIO = [600, 250, 150]
+"""Character gets most of the left column's height."""
 
 
 class LayoutManager:
@@ -106,6 +108,10 @@ class LayoutManager:
             for panel, title in ((p.floors, "Floors"), (p.alchemy, "Alchemy"), (p.scrolls, "Scrolls")):
                 self.tabs.addTab(panel, title)
             left = _splitter(Qt.Orientation.Vertical, p.character, p.backpack, p.kills)
+            left.setSizes(_DASHBOARD_LEFT_RATIO)
+            left.setStretchFactor(0, 3)
+            left.setStretchFactor(1, 2)
+            left.setStretchFactor(2, 1)
             splitter = _splitter(Qt.Orientation.Horizontal, left, p.notes, self.tabs)
             ratio = _DASHBOARD_RATIO
         splitter.setSizes(self._settings.splitter_sizes(name) or ratio)

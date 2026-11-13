@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
+    QFrame,
+    QScrollArea,
     QLabel,
     QProgressBar,
     QTableWidget,
@@ -42,7 +45,15 @@ def _table(columns: int, rows: int) -> QTableWidget:
     table.horizontalHeader().setStretchLastSection(True)
     table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
     table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+    table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    _fit_height(table)
     return table
+
+
+def _fit_height(table: QTableWidget) -> None:
+    """Show every row: the panel scrolls as a whole instead of each table."""
+    rows = sum(table.rowHeight(r) for r in range(table.rowCount()))
+    table.setFixedHeight(rows + 2 * table.frameWidth())
 
 
 class CharacterPanel(StatsPanel):
@@ -76,7 +87,13 @@ class CharacterPanel(StatsPanel):
         form.addRow(QLabel("Effects"))
         form.addRow(self.effects_label)
 
-        self._init_stack(content)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        self.scroll = scroll
+
+        self._init_stack(scroll)
 
     def _render_live(self, save: SaveFile) -> None:
         player = save.player
@@ -115,3 +132,5 @@ class CharacterPanel(StatsPanel):
             table.setItem(r, 0, QTableWidgetItem(key))
             table.setItem(r, 1, QTableWidgetItem(str(value)))
         table.resizeColumnToContents(0)
+        table.resizeRowsToContents()
+        _fit_height(table)
