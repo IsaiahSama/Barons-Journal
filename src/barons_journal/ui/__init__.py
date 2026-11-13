@@ -12,8 +12,8 @@ from .settings import AppSettings
 
 def run() -> int:
     """Start the app and return its exit code."""
-    from .controller import SessionController  # noqa: PLC0415 (built in a later task)
-    from .main_window import MainWindow  # noqa: PLC0415 (built in a later task)
+    from .controller import SessionController  # noqa: PLC0415
+    from .main_window import MainWindow  # noqa: PLC0415
 
     app = QApplication(sys.argv)
     app.setApplicationName("Baron's Journal")
@@ -23,5 +23,9 @@ def run() -> int:
     with Journal(default_journal_path()) as journal:
         controller = SessionController(journal, settings)
         window = MainWindow(controller, settings)
-        window.show()
+        controller.start()
+        if settings.geometry is None:
+            window.showMaximized()
+        else:
+            window.show()
         return app.exec()

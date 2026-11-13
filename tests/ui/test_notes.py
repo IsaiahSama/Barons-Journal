@@ -21,15 +21,30 @@ def _bind(ed, initial=""):
     return saved
 
 
-def test_typing_saves_after_idle(qtbot):
+def test_typing_arms_the_idle_timer_without_saving(qtbot, monkeypatch):
+    # A huge idle time, so a slow machine can't let the timer fire mid-test.
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
     ed = _editor(qtbot)
     saved = _bind(ed)
     QTest.keyClicks(ed, "hi")
     assert saved == []
-    qtbot.waitUntil(lambda: saved == ["hi"], timeout=3000)
+    assert ed._idle.isActive() and ed._idle.interval() == 600_000
 
 
-def test_flush_saves_immediately(qtbot):
+def test_typing_saves_after_idle(qtbot, monkeypatch):
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 20)
+    ed = _editor(qtbot)
+    saved = _bind(ed)
+    QTest.keyClicks(ed, "hi")
+    qtbot.waitUntil(lambda: saved == ["hi"], timeout=5000)
+
+
+def test_idle_default_is_600ms():
+    assert NoteEditor.IDLE_MS == 600
+
+
+def test_flush_saves_immediately(qtbot, monkeypatch):
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
     ed = _editor(qtbot)
     saved = _bind(ed)
     QTest.keyClicks(ed, "hi")
@@ -39,7 +54,8 @@ def test_flush_saves_immediately(qtbot):
     assert saved == ["hi"]
 
 
-def test_rebinding_flushes_previous(qtbot):
+def test_rebinding_flushes_previous(qtbot, monkeypatch):
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
     ed = _editor(qtbot)
     a = _bind(ed)
     QTest.keyClicks(ed, "hi")
@@ -49,11 +65,13 @@ def test_rebinding_flushes_previous(qtbot):
     assert b == []
 
 
-def test_programmatic_load_does_not_save(qtbot):
+def test_programmatic_load_does_not_save(qtbot, monkeypatch):
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 20)
     ed = _editor(qtbot)
     saved = _bind(ed, "loaded")
     ed.flush()
-    qtbot.wait(NoteEditor.IDLE_MS + 200)
+    assert not ed._idle.isActive()
+    qtbot.wait(200)
     assert saved == []
 
 
