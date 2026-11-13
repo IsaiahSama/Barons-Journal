@@ -95,6 +95,10 @@ class SessionController(QObject):
         self._settings.save_dir = path
         self._follow_changed()
 
+    def following(self) -> Path | None:
+        """The pinned save, or None when following the latest one."""
+        return self._settings.follow
+
     def follow_latest(self) -> None:
         self._settings.follow = None
         self._follow_changed()

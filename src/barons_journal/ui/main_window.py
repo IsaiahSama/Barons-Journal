@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from .controller import SessionController
+from .dialogs.runs_browser import RunsBrowserDialog
+from .dialogs.slot_picker import SlotPickerDialog
 from .layouts import LayoutManager, Panels
 from .panels.alchemy import AlchemyPanel
 from .panels.backpack import BackpackPanel
@@ -102,8 +104,8 @@ class MainWindow(QMainWindow):
         file_menu.addAction(quit_action)
 
         runs_menu = bar.addMenu("&Runs")
-        runs_menu.addAction(self._action("switch_run", "Switch run…"))
-        runs_menu.addAction(self._action("save_slot", "Save slot…"))
+        runs_menu.addAction(self._action("switch_run", "Switch run…", self._switch_run))
+        runs_menu.addAction(self._action("save_slot", "Save slot…", self._pick_slot))
         back = self._action("back_to_live", "Back to live run", self._controller.back_to_live)
         back.setEnabled(False)
         runs_menu.addAction(back)
@@ -144,6 +146,12 @@ class MainWindow(QMainWindow):
             self, "Choose Barony save folder", str(start) if start else ""
         )
         return Path(folder) if folder else None
+
+    def _switch_run(self) -> None:
+        RunsBrowserDialog(self._controller, self).exec()
+
+    def _pick_slot(self) -> None:
+        SlotPickerDialog(self._controller, self).exec()
 
     def _choose_folder(self) -> None:
         folder = self._ask_for_folder()
