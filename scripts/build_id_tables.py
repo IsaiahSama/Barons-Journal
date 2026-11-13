@@ -1,12 +1,16 @@
 """Regenerate src/barons_journal/data/ids.json from a Barony source checkout.
 
 Usage:
-    uv run python scripts/build_id_tables.py /path/to/Barony [--commit SHA]
+    uv run python scripts/build_id_tables.py /path/to/Barony \
+        --game-dir ~/.steam/steam/steamapps/common/Barony [--commit SHA] [--game-build ID]
 
 ID order comes from the C++ enums; display names come from the game's own
 language files (lang/en.txt, lang/item_names.json), so they match what the
 player sees in-game. A few spells have no language entry; those use the
 names from the Barony Save Editor (github.com/Groshie/Barony-Save-Editor).
+
+Status effect names aren't in the source repo. They come from
+data/status_effects.json in an installed copy of the game (--game-dir).
 
 When Barony updates: rerun this, check the counts it prints against a new
 save's array lengths, update the expected sizes in tests/data/test_ids.py,
@@ -62,6 +66,15 @@ SPELL_KEY_ALIASES = {
     "MYCELIUM_BOMB": "spell_mycelium",
 }
 
+# Status effects whose in-game name is a list of variants (tiers, forms) get one generic name.
+EFFECT_NAME_OVERRIDES = {
+    "EFF_VAMPIRICAURA": "Vampiric Aura",  # or "Vampiric Curse"
+    "EFF_SHAPESHIFT": "Shapeshifted",  # "Rat Form", "Troll Form", ...
+    "EFF_SALAMANDER_HEART": "Radiant Heart",  # or "Stone Heart"
+}
+# stat.hpp name -> internal_name in status_effects.json, where they differ.
+EFFECT_INTERNAL_ALIASES = {"EFF_SALAMANDER_HEART": "EFF_RADIANT_HEART"}
+
 # items.hpp `Status` enum. Not in en.txt as standalone words.
 ITEM_STATUS = ["broken", "decrepit", "worn", "serviceable", "excellent"]
 
@@ -82,7 +95,42 @@ def enum_members(source: str, start: str, end: str) -> list[str]:
     return [m.split("=")[0].strip() for m in body.split(",") if m.strip()]
 
 
-def build(barony: Path) -> dict:
+def derived_name(enum_name: str) -> str:
+    """EFF_SHADOW_TAGGED -> "Shadow tagged"."""
+    return enum_name.removeprefix("EFF_").replace("_", " ").capitalize()
+
+
+def build_effects(barony: Path, game_dir: Path) -> tuple[list[str], list[int]]:
+    """Return (names, hidden IDs). Hidden = the game shows no HUD entry for it."""
+    stat_src = (barony / "src/stat.hpp").read_text(encoding="utf-8")
+    enum = {int(n): f"EFF_{k}" for k, n in re.findall(r"static const int EFF_(\w+) = (\d+);", stat_src)}
+    assert sorted(enum) == list(range(len(enum))), "gap in EFF_ IDs"
+
+    data = json.loads((game_dir / "data/status_effects.json").read_text(encoding="utf-8"))
+    by_id = {e["id"]: e for e in data["effects"].values() if e["id"] >= 0}
+    assert sorted(by_id) == sorted(enum), "status_effects.json IDs don't match stat.hpp"
+
+    names, hidden = [], []
+    for i in range(len(enum)):
+        entry = by_id[i]
+        expected = EFFECT_INTERNAL_ALIASES.get(enum[i], enum[i])
+        assert entry["internal_name"] == expected, (i, entry["internal_name"], enum[i])
+        name = entry["name"]
+        if enum[i] in EFFECT_NAME_OVERRIDES:
+            name = EFFECT_NAME_OVERRIDES[enum[i]]
+        elif isinstance(name, list):
+            name = re.sub(r" \(Tier [IV]+\)$", "", name[0])
+            assert all(re.sub(r" \(Tier [IV]+\)$", "", n) == name for n in entry["name"]), entry["name"]
+        elif name == "":
+            hidden.append(i)
+            name = derived_name(enum[i])
+        elif name.startswith("EFF_"):  # placeholder left in the game data
+            name = derived_name(name)
+        names.append(name)
+    return names, hidden
+
+
+def build(barony: Path, game_dir: Path) -> dict:
     lang = read_lang(barony / "lang/en.txt")
     lang_json = json.loads((barony / "lang/item_names.json").read_text(encoding="utf-8"))
 
@@ -117,6 +165,8 @@ def build(barony: Path) -> dict:
         else:
             spells.append(SPELL_FALLBACK_NAMES[enum_name])  # KeyError = new unnamed spell
 
+    effects, hidden_effects = build_effects(barony, game_dir)
+
     return {
         "classes": [lang[n] for n in CLASS_STRINGS],
         "races": [lang[n] for n in RACE_STRINGS[:9]]
@@ -128,18 +178,25 @@ def build(barony: Path) -> dict:
         "items_unidentified": [i["name_unidentified"] for i in item_names],
         "spells": spells,
         "item_status": ITEM_STATUS,
+        "effects": effects,
+        "effects_hidden": hidden_effects,
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("barony", type=Path, help="path to a TurningWheel/Barony checkout")
+    parser.add_argument("--game-dir", type=Path, required=True, help="installed Barony folder (has data/)")
     parser.add_argument("--commit", default="unknown", help="Barony commit SHA, recorded for provenance")
+    parser.add_argument("--game-build", default="unknown", help="Steam build ID of --game-dir, for provenance")
     args = parser.parse_args()
 
-    tables = build(args.barony)
+    tables = build(args.barony, args.game_dir)
     out = {
-        "_source": f"TurningWheel/Barony@{args.commit}, generated by scripts/build_id_tables.py",
+        "_source": (
+            f"TurningWheel/Barony@{args.commit} + game data from Steam build {args.game_build}, "
+            "generated by scripts/build_id_tables.py"
+        ),
         **tables,
     }
     OUT.write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

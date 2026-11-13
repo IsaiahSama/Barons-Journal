@@ -5,12 +5,15 @@ import pytest
 from barons_journal.data import load_save, parse_save
 from barons_journal.data.ids import (
     CLASSES,
+    EFFECTS,
+    HIDDEN_EFFECTS,
     ITEM_STATUS,
     ITEMS,
     ITEMS_UNIDENTIFIED,
     MONSTERS,
     PROFICIENCIES,
     RACES,
+    SPELL_ITEM,
     SPELLS,
 )
 
@@ -29,6 +32,7 @@ from barons_journal.data.ids import (
         (ITEMS_UNIDENTIFIED, 524),
         (SPELLS, 225),  # NUM_SPELLS
         (ITEM_STATUS, 5),
+        (EFFECTS, 135),  # EFF_* constants; the save reserves NUMEFFECTS = 160 slots
     ],
 )
 def test_table_sizes(table, size):
@@ -71,6 +75,15 @@ def test_table_sizes_match_sample_save_arrays(raw_save):
         (SPELLS, 224, "Holy Beam"),
         (ITEM_STATUS, 0, "broken"),
         (ITEM_STATUS, 4, "excellent"),
+        (EFFECTS, 0, "Asleep"),
+        (EFFECTS, 16, "Magic Resistance"),
+        (EFFECTS, 2, "Stunned"),  # no in-game name; derived from EFF_STUNNED
+        (EFFECTS, 18, "Vampiric Aura"),  # in-game name varies by context
+        (EFFECTS, 29, "Shapeshifted"),  # in-game: Rat Form / Troll Form / ...
+        (EFFECTS, 47, "Flute"),  # in-game: Flute (Tier I..IV)
+        (EFFECTS, 128, "Radiant Heart"),
+        (EFFECTS, 133, "Sanctuary"),
+        (EFFECTS, 134, "Ducked"),  # game data has placeholder "EFF_DUCKED"
     ],
 )
 def test_known_names(table, id_, name):
@@ -82,12 +95,23 @@ def test_identified_and_unidentified_item_names_differ_where_expected():
     assert ITEMS_UNIDENTIFIED[gloves] == "gloves"
 
 
+def test_spell_item_constant():
+    assert ITEMS[SPELL_ITEM] == "spell"
+
+
+def test_hidden_effects_are_ones_the_game_does_not_show():
+    assert 2 in HIDDEN_EFFECTS  # stunned
+    assert 0 not in HIDDEN_EFFECTS  # asleep
+    assert 134 not in HIDDEN_EFFECTS  # has a placeholder name, not a blank one
+    assert all(0 <= i < len(EFFECTS) for i in HIDDEN_EFFECTS)
+
+
 def test_spell_zero_means_no_spell():
     assert SPELLS.get(0) is None
 
 
 def test_no_blank_names_except_spell_none():
-    for table in (CLASSES, RACES, MONSTERS, PROFICIENCIES, ITEMS, ITEMS_UNIDENTIFIED, ITEM_STATUS):
+    for table in (CLASSES, RACES, MONSTERS, PROFICIENCIES, ITEMS, ITEMS_UNIDENTIFIED, ITEM_STATUS, EFFECTS):
         assert all(table.get(i) for i in range(len(table))), table.kind
     assert all(SPELLS.get(i) for i in range(1, len(SPELLS)))
 

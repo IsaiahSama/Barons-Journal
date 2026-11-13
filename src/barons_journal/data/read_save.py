@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import Player, SaveFile, Stats
+from .models import Effect, Equipment, Item, Player, SaveFile, Stats
 
 MAGIC_COOKIE = "BARONYJSONSAVE"
 SUPPORTED_VERSIONS = frozenset({502})
@@ -71,6 +71,10 @@ def parse_save(raw: Any) -> SaveFile:
 
 def _parse_player(raw: dict) -> Player:
     stats = _require(raw, "stats")
+    raw_inventory = _require(stats, "inventory")
+    slot_indices = _parse_equipment_slots(_require(stats, "player_equipment"), len(raw_inventory))
+    equipped = set(slot_indices.values())
+    inventory = tuple(_parse_item(item, i in equipped) for i, item in enumerate(raw_inventory))
     return Player(
         name=_clean_name(_require(stats, "name")),
         char_class=_require(raw, "char_class"),
@@ -78,6 +82,57 @@ def _parse_player(raw: dict) -> Player:
         stats=_parse_stats(stats),
         kills=tuple(_require(raw, "kills")),
         hotbar=tuple(_none_if_empty(slot) for slot in _require(raw, "hotbar")),
+        inventory=inventory,
+        equipment=Equipment(**{slot: inventory[i] for slot, i in slot_indices.items()}),
+        effects=_parse_effects(stats),
+    )
+
+
+def _parse_item(raw: dict, equipped: bool) -> Item:
+    return Item(
+        type=_require(raw, "type"),
+        status=_require(raw, "status"),
+        beatitude=_require(raw, "beatitude"),
+        count=_require(raw, "count"),
+        appearance=_require(raw, "appearance"),
+        identified=_require(raw, "identified"),
+        equipped=equipped,
+    )
+
+
+def _parse_equipment_slots(raw: list[dict], inventory_size: int) -> dict[str, int]:
+    """Slot name -> inventory index, for filled slots.
+
+    For the local player, ``player_equipment`` holds indices into the inventory
+    (empty slots are uint32 -1). Missing slots count as empty.
+    """
+    known = Equipment.slot_names()
+    slots = {}
+    for entry in raw:
+        slot, index = _require(entry, "first"), _none_if_empty(_require(entry, "second"))
+        if slot not in known:
+            raise InvalidSaveError(f"Unknown equipment slot {slot!r}")
+        if index is None:
+            continue
+        if not 0 <= index < inventory_size:
+            raise InvalidSaveError(
+                f"Equipment slot {slot!r} points at inventory index {index}, "
+                f"but the inventory has {inventory_size} items"
+            )
+        slots[slot] = index
+    return slots
+
+
+def _parse_effects(stats: dict) -> tuple[Effect, ...]:
+    strengths, timers = _require(stats, "EFFECTS"), _require(stats, "EFFECTS_TIMERS")
+    if len(strengths) != len(timers):
+        raise InvalidSaveError(
+            f"EFFECTS has {len(strengths)} entries but EFFECTS_TIMERS has {len(timers)}"
+        )
+    return tuple(
+        Effect(id=i, strength=strength, timer_ticks=timer)
+        for i, (strength, timer) in enumerate(zip(strengths, timers))
+        if strength
     )
 
 

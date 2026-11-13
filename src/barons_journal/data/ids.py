@@ -55,5 +55,11 @@ ITEMS = IdTable("item", _data["items"])
 ITEMS_UNIDENTIFIED = IdTable("item", _data["items_unidentified"])
 SPELLS = IdTable("spell", _data["spells"])
 ITEM_STATUS = IdTable("item status", _data["item_status"])
+EFFECTS = IdTable("effect", _data["effects"])
+HIDDEN_EFFECTS: frozenset[int] = frozenset(_data["effects_hidden"])
+"""Effect IDs the game never shows in its HUD (internal timers and flags)."""
+
+SPELL_ITEM = 162
+"""Item type of a learned spell in the inventory; the item's ``appearance`` is the spell ID."""
 
 del _data
