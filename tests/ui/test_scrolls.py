@@ -113,3 +113,12 @@ def test_empty_mode(qtbot, empty_dir_controller):
     assert not panel.empty_label.isHidden()
     assert panel.remaining_list.count() == 0
     assert panel.row_widgets(SCROLL_LABELS[0]) == (None, None)
+
+
+def test_view_change_for_same_run_keeps_widgets(qtbot, controller):
+    panel = _panel(qtbot, controller)
+    combo, _ = panel.row_widgets("ZELGO MER")
+    controller.view_changed.emit(controller.view())
+    assert panel.row_widgets("ZELGO MER")[0] is combo
+    _pick(combo, "scroll of fire")  # scrolls_changed still re-renders
+    assert panel.row_widgets("ZELGO MER")[0] is None

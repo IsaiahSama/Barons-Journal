@@ -51,7 +51,7 @@ class AlchemyPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.grid = QTableView()
-        self.grid.setModel(AlchemyModel())
+        self.grid.setModel(AlchemyModel(self))
         self.grid.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
         self.grid.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.grid.setWordWrap(True)

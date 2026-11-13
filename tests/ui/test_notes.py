@@ -193,3 +193,38 @@ def test_same_floor_view_change_keeps_text_and_cursor(
     assert after == before
     assert run.toPlainText() == "run text"
     assert not notes_panel.switch_prompt.isVisible()
+
+
+def test_failed_save_keeps_text_dirty_and_retries(qtbot):
+    ed = _editor(qtbot)
+    calls: list[str] = []
+
+    def saver(body):
+        calls.append(body)
+        if len(calls) == 1:
+            raise RuntimeError("database is locked")
+
+    ed.bind(lambda: "", saver, read_only=False)
+    ed.setPlainText("words")
+    ed._dirty = True
+    with pytest.raises(RuntimeError):
+        ed.flush()
+    assert ed._dirty
+    ed.flush()
+    assert calls == ["words", "words"] and not ed._dirty
+
+
+def test_popup_focus_out_flushes_without_focus_lost(qtbot):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtWidgets import QApplication
+
+    ed = _editor(qtbot)
+    saved = _bind(ed)
+    lost: list[int] = []
+    ed.focus_lost.connect(lambda: lost.append(1))
+    QTest.keyClicks(ed, "abc")
+    QApplication.sendEvent(ed, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.PopupFocusReason))
+    assert saved == ["abc"] and lost == []
+    QApplication.sendEvent(ed, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason))
+    assert lost == [1]

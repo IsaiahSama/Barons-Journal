@@ -27,6 +27,7 @@ class ScrollsPanel(QWidget):
         super().__init__(parent)
         self._controller = controller
         self._gamekey: int | None = None
+        self._rendered: tuple[int | None, str, bool] | None = None
         self._rows: dict[str, tuple[QComboBox | None, QPushButton | None]] = {}
 
         self.empty_label = QLabel("No run loaded")
@@ -63,6 +64,9 @@ class ScrollsPanel(QWidget):
         return self._rows.get(label, (None, None))
 
     def _on_view_changed(self, view: ViewState) -> None:
+        key = (view.run.gamekey if view.run is not None else None, view.mode, view.editable)
+        if key == self._rendered:
+            return  # e.g. a stats refresh: keep an open combo popup and focus
         self.error_label.hide()
         self.render(view)
 
@@ -73,6 +77,7 @@ class ScrollsPanel(QWidget):
     def render(self, view: ViewState) -> None:
         self._clear()
         run = view.run
+        self._rendered = (run.gamekey if run is not None else None, view.mode, view.editable)
         self._gamekey = run.gamekey if run is not None else None
         self.empty_label.setVisible(run is None)
         self._body.setVisible(run is not None)

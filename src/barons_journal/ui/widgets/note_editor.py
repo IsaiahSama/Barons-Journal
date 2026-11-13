@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import QPlainTextEdit
 
@@ -44,9 +44,9 @@ class NoteEditor(QPlainTextEdit):
         self._idle.stop()
         if not self._dirty:
             return
-        self._dirty = False
         if self._save is not None:
-            self._save(self.toPlainText())
+            self._save(self.toPlainText())  # if it raises, the text stays dirty
+        self._dirty = False
 
     def reload_if_unfocused(self) -> None:
         if self._load is None or self.hasFocus() or self._dirty:
@@ -58,7 +58,8 @@ class NoteEditor(QPlainTextEdit):
     def focusOutEvent(self, event: QFocusEvent) -> None:
         super().focusOutEvent(event)
         self.flush()
-        self.focus_lost.emit()
+        if event.reason() != Qt.FocusReason.PopupFocusReason:  # e.g. the context menu
+            self.focus_lost.emit()
 
     def _set_text(self, text: str) -> None:
         self._loading = True
