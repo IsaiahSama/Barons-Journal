@@ -166,6 +166,7 @@ class FloorsPanel(QWidget):
         self._view = view
         run = view.run
         key = (run.gamekey, view.mode) if run is not None else None
+        same_run = key is not None and key == self._run_key
         if key != self._run_key:
             self._run_key = key
             self._user_choice = False
@@ -176,10 +177,16 @@ class FloorsPanel(QWidget):
             self.table.setCurrentIndex(QModelIndex())
             self._bind(None)
             return
-        if not self._user_choice:
+        if not self._user_choice and not (
+            same_run and self._bound is not None and self._note_editor_active()
+        ):
+            # Never swap the note under the cursor; only the highlight moves.
             self.select(current)
         else:
             self._bind(self._selected_location())
+
+    def _note_editor_active(self) -> bool:
+        return self.note_editor.hasFocus()
 
     def _refresh_notes(self, current: Location | None = None) -> None:
         run = self._view.run

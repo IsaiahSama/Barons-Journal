@@ -128,3 +128,17 @@ def test_external_note_change_reloads_editor(qtbot, controller):
     panel.select(Location(0))
     controller.save_floor_note(LIVE, Location(0), "elsewhere")
     assert panel.note_editor.toPlainText() == "elsewhere"
+
+
+def test_typing_editor_not_yanked_to_new_floor(qtbot, controller, raw_save, monkeypatch):
+    panel = _panel(qtbot, controller)
+    monkeypatch.setattr(panel, "_note_editor_active", lambda: True)
+    QTest.keyClicks(panel.note_editor, "typed")
+    _go_to(controller, raw_save, 4)
+    assert panel.note_editor.toPlainText() == "typed"
+    assert controller.floor_note(LIVE, Location(0)) == "typed"
+    assert panel.table.currentIndex().row() == panel.model.row_of(Location(0))
+    new = panel.model.index(panel.model.row_of(Location(4)), 0)
+    assert panel.model.data(new, Qt.ItemDataRole.FontRole).bold()
+    old = panel.model.index(panel.model.row_of(Location(0)), 0)
+    assert panel.model.data(old, Qt.ItemDataRole.FontRole) is None
