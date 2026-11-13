@@ -363,9 +363,8 @@ Saving an empty string deletes the note. Use `save.dungeon_lvl` for the current 
 
 ## Not built yet
 
-These are known gaps the UI work will run into. They're not bugs.
+These are known gaps the UI work will run into. They're not bugs. (Watching the save for changes is built: see `ui/controller.py`, `SessionController`.)
 
-- **Watching the save.** Built in `ui/controller.py` (`SessionController`): it watches the save file and its folder with `QFileSystemWatcher`, then runs `load_save` → `journal.record_run(save)` → refresh the views. A failed read (`InvalidSaveError`, e.g. mid-write) keeps the last good data and retries shortly after with a `QTimer`. It calls `find_saves()` again when the folder changes, to notice a new slot.
 - **Labels on inventory scrolls.** By design (see "How labels work"), the player enters labels by hand.
 - **Hotbar.** `player.hotbar` holds raw values that look like inventory indices, but this isn't confirmed or resolved to `Item`s.
 - **Inventory grid positions** (`x`/`y` in the save) aren't parsed.
