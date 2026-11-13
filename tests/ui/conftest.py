@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterable
 import shutil
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -68,9 +69,13 @@ def _model_text(view: QAbstractItemView) -> list[str]:
 def all_visible_text():
     """Return a function joining all user-visible text under a widget."""
 
-    def collect(widget: QWidget) -> str:
+    def collect(widget: QWidget, skip: Iterable[QWidget] = ()) -> str:
+        """Join the text under widget, leaving out the subtrees of the widgets in skip."""
+        skipped = list(skip)
         parts: list[str] = []
         for w in [widget, *widget.findChildren(QWidget)]:
+            if any(w is s or s.isAncestorOf(w) for s in skipped):
+                continue
             parts.append(w.toolTip())
             if isinstance(w, QLabel):
                 parts.append(w.text())

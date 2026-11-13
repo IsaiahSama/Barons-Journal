@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
             self._controller.set_save_dir(folder)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self.panels.notes.flush()
+        self.panels.flush_notes()
         self._settings.geometry = self.saveGeometry()
         self.layouts.save_sizes()
         event.accept()

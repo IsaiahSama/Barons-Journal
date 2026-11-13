@@ -28,6 +28,11 @@ class Panels:
     alchemy: AlchemyPanel
     scrolls: ScrollsPanel
 
+    def flush_notes(self) -> None:
+        """Save pending edits in every note editor (Notes panel and Floors tab)."""
+        self.notes.flush()
+        self.floors.note_editor.flush()
+
     def all(self) -> list[QWidget]:
         return [
             self.character,
@@ -57,7 +62,7 @@ class LayoutManager:
         self._build(self.current)
 
     def apply(self, name: LayoutName) -> None:
-        self._panels.notes.flush()
+        self._panels.flush_notes()
         self.save_sizes()
         old = self.splitter
         for panel in self._panels.all():

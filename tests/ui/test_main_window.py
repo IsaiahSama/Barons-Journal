@@ -1,9 +1,10 @@
 import json
+import re
 
 import pytest
 from PySide6.QtCore import QByteArray
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QSplitter
+from PySide6.QtWidgets import QComboBox, QSplitter
 
 from barons_journal.ui.main_window import MainWindow
 from barons_journal.ui.settings import AppSettings
@@ -182,18 +183,43 @@ def test_geometry_restored(controller, settings, qtbot):
     assert w2.size().width() == 900
 
 
+def test_close_flushes_pending_floors_tab_note(window, controller, monkeypatch):
+    from barons_journal.ui.widgets.note_editor import NoteEditor
+
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
+    editor = window.panels.floors.note_editor
+    editor.setFocus()
+    QTest.keyClicks(editor, "floor words")
+    window.close()
+    assert "floor words" in controller.floor_notes(LIVE).values()
+
+
+def test_layout_switch_flushes_pending_floors_tab_note(window, controller, monkeypatch):
+    from barons_journal.ui.widgets.note_editor import NoteEditor
+
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
+    editor = window.panels.floors.note_editor
+    editor.setFocus()
+    QTest.keyClicks(editor, "floor words")
+    window.actions["layout_dashboard"].trigger()
+    assert "floor words" in controller.floor_notes(LIVE).values()
+
+
 def test_whole_window_never_shows_unidentified_true_name(
     window_with_unidentified_scroll, all_visible_text
 ):
     w = window_with_unidentified_scroll
+    scrolls = w.panels.scrolls
     for name in ("focus", "dashboard"):
         w.actions[f"layout_{name}"].trigger()
-        p = w.panels
-        assert "scroll" in all_visible_text(p.backpack).lower()
-        # Floors and Alchemy are static reference text, Scrolls lists every scroll
-        # type as a candidate; none of them know about this item. Everything that
-        # shows the player's items or stats must not say "fire" at all.
-        for widget in (w.header, p.character, p.backpack, p.kills, p.notes):
-            assert "fire" not in all_visible_text(widget).lower()
-        assert "scroll of fire" not in all_visible_text(p.floors).lower()
-        assert "scroll of fire" not in all_visible_text(p.alchemy).lower()
+        # The Scrolls tab's candidate pickers and "Still to find" list name every
+        # scroll type by design; they say nothing about this item. Sweep the rest.
+        combos = scrolls.findChildren(QComboBox)
+        skip = [scrolls.remaining_list, *combos, *(c.view() for c in combos)]
+        text = all_visible_text(w, skip=skip)
+        assert "scroll of fire" not in text.lower()
+        assert not re.search(r"\bfire\b", text, re.I)
+        backpack = all_visible_text(w.panels.backpack)
+        assert "scroll" in backpack.lower()
+        rows = [line for line in backpack.splitlines() if "scroll" in line.lower()]
+        assert rows and not any("fire" in line.lower() for line in rows)
