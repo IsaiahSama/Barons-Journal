@@ -93,6 +93,7 @@ class SessionController(QObject):
 
     def set_save_dir(self, path: Path) -> None:
         self._settings.save_dir = path
+        self._settings.follow = None  # a pinned save would override the new folder
         self._follow_changed()
 
     def following(self) -> Path | None:
@@ -187,10 +188,10 @@ class SessionController(QObject):
         try:
             mtime = datetime.fromtimestamp(path.stat().st_mtime)
             save = load_save(path)
-        except InvalidSaveError as exc:
-            self._failed(f"Couldn't read the save: {exc}. Showing the last good data.", False)
         except FileNotFoundError:
             self._failed(None, True)
+        except (InvalidSaveError, OSError) as exc:
+            self._failed(f"Couldn't read the save: {exc}", False)
         else:
             self._loaded(path, mtime, save)
         self._sync_watches()
@@ -246,7 +247,8 @@ class SessionController(QObject):
     def _failed(self, message: str | None, missing: bool) -> None:
         """Keep the current view; retry shortly, and give up after MAX_RETRIES."""
         if message is not None:
-            self._error = message
+            has_data = self._live_view.mode != "empty"
+            self._error = message + (". Showing the last good data." if has_data else "")
         if self._retries < self.MAX_RETRIES:
             self._retries += 1
             self._retry.start(self.RETRY_MS)

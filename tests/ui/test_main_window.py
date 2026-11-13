@@ -223,3 +223,21 @@ def test_whole_window_never_shows_unidentified_true_name(
         assert "scroll" in backpack.lower()
         rows = [line for line in backpack.splitlines() if "scroll" in line.lower()]
         assert rows and not any("fire" in line.lower() for line in rows)
+
+
+def test_unreadable_only_save_shows_error_on_empty_page(controller, settings, save_dir, qtbot):
+    (save_dir / "savegame0.baronsave").unlink(missing_ok=True)
+    (save_dir / "savegame0.baronysave").write_text('{"magic_cookie": "BARONYJSONSAVE", "game_version": 503}')
+    w = _make(controller, settings, qtbot)
+    assert w.stack.currentIndex() == 0
+    assert not w.empty_error.isHidden()
+    assert w.empty_error.text().startswith("Couldn't read the save:")
+    assert "last good data" not in w.empty_error.text()
+    assert w.empty_title.text() != "No Barony saves found"
+    assert not w.choose_folder_button.isHidden()
+
+
+def test_no_saves_shows_plain_empty_page(empty_dir_controller, settings, qtbot):
+    w = _make(empty_dir_controller, settings, qtbot)
+    assert w.empty_title.text() == "No Barony saves found"
+    assert w.empty_error.isHidden()

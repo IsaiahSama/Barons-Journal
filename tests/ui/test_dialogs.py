@@ -141,3 +141,19 @@ def test_slot_picker_pins_and_unpins(controller, settings, save_dir, qtbot):
     dlg2.select_row(0)
     dlg2.choose_button.click()
     assert settings.follow is None
+
+
+def test_slot_picker_unreadable_for_bad_bytes_and_permission(controller, save_dir, qtbot, monkeypatch):
+    (save_dir / "savegame3.baronysave").write_bytes(b"\xff\xfe\x00")
+    controller.start()
+    dlg = SlotPickerDialog(controller)
+    qtbot.addWidget(dlg)
+    t = dlg.table
+    assert {_cell(t, r, 0): _cell(t, r, 4) for r in range(1, 3)}["3"] == "unreadable"
+
+    import barons_journal.ui.dialogs.slot_picker as mod
+
+    monkeypatch.setattr(mod, "load_save", lambda p: (_ for _ in ()).throw(PermissionError("x")))
+    dlg2 = SlotPickerDialog(controller)
+    qtbot.addWidget(dlg2)
+    assert _cell(dlg2.table, 1, 4) == "unreadable"

@@ -121,3 +121,44 @@ def test_about_to_change_precedes_view_changed(controller):
     controller.view_changed.connect(lambda v: order.append("view"))
     controller.start()
     assert order == ["about", "view"]
+
+
+def test_bad_bytes_save_at_start_shows_error_and_retries(controller, qtbot, save_dir):
+    (save_dir / "savegame0.baronysave").write_bytes(b"\xff\xfe\x00bad")
+    controller.start()  # must not raise
+    assert controller.view().mode == "empty"
+    banner = controller.banner()
+    assert banner is not None and banner.kind == "error"
+    assert banner.text.startswith("Couldn't read the save:")
+    assert "last good data" not in banner.text
+    assert controller._retries >= 1
+
+
+def test_permission_error_is_retryable(controller, monkeypatch):
+    import barons_journal.ui.controller as mod
+
+    def locked(_path):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(mod, "load_save", locked)
+    controller.start()
+    assert controller.banner().kind == "error"
+    assert "locked" in controller.banner().text
+    assert controller._retries >= 1
+
+
+def test_good_data_then_error_keeps_last_good_wording(controller, save_dir):
+    controller.start()
+    (save_dir / "savegame0.baronysave").write_bytes(b"\xff\xfe")
+    controller.reload()
+    assert controller.banner().text.endswith("Showing the last good data.")
+
+
+def test_choose_folder_clears_pinned_save(controller, settings, save_dir, tmp_path):
+    controller.start()
+    controller.follow_path(save_dir / "savegame0.baronysave")
+    other = tmp_path / "other"
+    other.mkdir()
+    controller.set_save_dir(other)
+    assert settings.follow is None
+    assert controller.view().mode == "empty"

@@ -172,3 +172,12 @@ class TestSecretLevel:
         del raw_save["level_track"]
         with pytest.raises(InvalidSaveError, match="level_track"):
             parse_save(raw_save)
+
+
+def test_load_save_non_utf8_is_invalid_save(tmp_path):
+    from barons_journal.data import InvalidSaveError, load_save
+
+    path = tmp_path / "savegame0.baronysave"
+    path.write_bytes(b"\xff\xfe{\x00")
+    with pytest.raises(InvalidSaveError, match="UTF-8"):
+        load_save(path)

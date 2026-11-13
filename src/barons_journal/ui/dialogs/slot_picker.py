@@ -26,7 +26,7 @@ UNREADABLE = "unreadable"
 def _character_name(slot: SaveSlot) -> str:
     try:
         return load_save(slot.path).player.name
-    except (InvalidSaveError, FileNotFoundError):
+    except (InvalidSaveError, OSError):
         return UNREADABLE
 
 

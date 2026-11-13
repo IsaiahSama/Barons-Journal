@@ -30,7 +30,10 @@ class UnsupportedVersionError(InvalidSaveError):
 
 def load_save(path: str | Path) -> SaveFile:
     """Read and parse the save at ``path``. Raises ``FileNotFoundError`` if missing."""
-    text = Path(path).read_text(encoding="utf-8")
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        raise InvalidSaveError(f"Save file is not valid UTF-8 text: {e}") from e
     try:
         raw = json.loads(text)
     except json.JSONDecodeError as e:

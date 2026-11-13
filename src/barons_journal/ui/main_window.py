@@ -58,8 +58,14 @@ class MainWindow(QMainWindow):
         title_font.setPointSize(title_font.pointSize() + 4)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_title = title
+        self.empty_error = QLabel()
+        self.empty_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_error.setWordWrap(True)
+        self.empty_error.hide()
         self.choose_folder_button = QPushButton("Choose save folder…")
         empty_box.addWidget(title)
+        empty_box.addWidget(self.empty_error)
         empty_box.addWidget(self.choose_folder_button, 0, Qt.AlignmentFlag.AlignCenter)
         empty_box.addStretch(1)
 
@@ -81,6 +87,8 @@ class MainWindow(QMainWindow):
 
         self.choose_folder_button.clicked.connect(self._choose_folder)
         controller.view_changed.connect(self._on_view)
+        controller.banner_changed.connect(self._on_banner)
+        self._on_banner(controller.banner())
         self._on_view(controller.view())
 
         geometry = settings.geometry
@@ -139,6 +147,13 @@ class MainWindow(QMainWindow):
     def _on_view(self, view: ViewState) -> None:
         self.stack.setCurrentIndex(0 if view.mode == "empty" else 1)
         self.actions["back_to_live"].setEnabled(view.mode == "past")
+
+    def _on_banner(self, banner) -> None:
+        """With no run to show, the header is hidden: show a read error on the empty page."""
+        error = banner is not None and banner.kind == "error"
+        self.empty_error.setText(banner.text if error else "")
+        self.empty_error.setVisible(error)
+        self.empty_title.setText("Couldn't read the save" if error else "No Barony saves found")
 
     def _ask_for_folder(self) -> Path | None:
         start = self._settings.save_dir
