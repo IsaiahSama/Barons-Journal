@@ -88,3 +88,34 @@ def all_visible_text():
         return "\n".join(p for p in parts if p)
 
     return collect
+
+
+@pytest.fixture
+def journal(journal_path):
+    from barons_journal.journal import Journal
+
+    j = Journal(journal_path)
+    yield j
+    j.close()
+
+
+@pytest.fixture
+def controller(journal, settings, save_dir, monkeypatch):
+    from barons_journal.ui.controller import SessionController
+
+    monkeypatch.setattr(SessionController, "DEBOUNCE_MS", 10)
+    monkeypatch.setattr(SessionController, "RETRY_MS", 20)
+    settings.save_dir = save_dir
+    return SessionController(journal, settings)
+
+
+@pytest.fixture
+def empty_dir_controller(journal, settings, tmp_path, monkeypatch):
+    from barons_journal.ui.controller import SessionController
+
+    monkeypatch.setattr(SessionController, "DEBOUNCE_MS", 10)
+    monkeypatch.setattr(SessionController, "RETRY_MS", 20)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    settings.save_dir = empty
+    return SessionController(journal, settings)
