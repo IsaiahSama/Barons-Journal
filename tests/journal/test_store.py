@@ -1,22 +1,114 @@
-"""Tests for the SQLite-backed journal: scroll identifications and notes."""
+"""Tests for the SQLite-backed journal: runs, scroll identifications, and notes."""
 
+import dataclasses
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from barons_journal.journal import Journal, JournalError, default_journal_path
+from barons_journal.data import SaveFile, load_save
+from barons_journal.journal import Journal, JournalError, Run, default_journal_path
 from barons_journal.reference import scroll_by_item_id
 
-RUN = 1791824898
+RUN = 1791824898  # the sample save's gamekey
 OTHER_RUN = 42
+SAMPLE_TIME = datetime(2026, 10, 12, 13, 8, 18)
 
 
 @pytest.fixture
-def journal():
+def sample(sample_save_path) -> SaveFile:
+    return load_save(sample_save_path)
+
+
+def save_like(sample: SaveFile, *, gamekey: int = RUN, timestamp: datetime = SAMPLE_TIME,
+              dungeon_lvl: int = 0, name: str = "Moonshine") -> SaveFile:
+    """The sample save with some fields changed."""
+    player = dataclasses.replace(sample.player, name=name)
+    return dataclasses.replace(sample, gamekey=gamekey, timestamp=timestamp,
+                               dungeon_lvl=dungeon_lvl, player=player)
+
+
+@pytest.fixture
+def empty_journal():
     with Journal(":memory:") as j:
         yield j
+
+
+@pytest.fixture
+def journal(empty_journal, sample):
+    """A journal with RUN and OTHER_RUN already recorded."""
+    empty_journal.record_run(sample)
+    empty_journal.record_run(save_like(sample, gamekey=OTHER_RUN, timestamp=datetime(2026, 9, 1)))
+    return empty_journal
+
+
+# --- Runs -----------------------------------------------------------------------
+
+
+class TestRuns:
+    def test_no_runs(self, empty_journal):
+        assert empty_journal.runs() == []
+
+    def test_record_run_from_save(self, empty_journal, sample):
+        empty_journal.record_run(sample)
+        (run,) = empty_journal.runs()
+        assert run == Run(
+            gamekey=RUN, character_name="Moonshine", char_class=1, race=0,
+            last_floor=0, first_seen=SAMPLE_TIME, last_seen=SAMPLE_TIME,
+        )
+        assert (run.class_name, run.race_name) == ("Warrior", "Human")
+
+    def test_get_run(self, journal):
+        assert journal.run(RUN).character_name == "Moonshine"
+        assert journal.run(12345) is None
+
+    def test_newer_save_updates_run(self, empty_journal, sample):
+        empty_journal.record_run(sample)
+        later = datetime(2026, 10, 12, 14, 0, 0)
+        empty_journal.record_run(save_like(sample, timestamp=later, dungeon_lvl=4))
+        run = empty_journal.run(RUN)
+        assert (run.first_seen, run.last_seen, run.last_floor) == (SAMPLE_TIME, later, 4)
+
+    def test_older_save_does_not_roll_back(self, empty_journal, sample):
+        # e.g. the user restores a backup of an earlier save
+        later = datetime(2026, 10, 12, 14, 0, 0)
+        empty_journal.record_run(save_like(sample, timestamp=later, dungeon_lvl=4))
+        empty_journal.record_run(sample)
+        run = empty_journal.run(RUN)
+        assert (run.last_seen, run.last_floor) == (later, 4)
+        assert run.first_seen == SAMPLE_TIME
+
+    def test_recording_same_save_twice_is_harmless(self, empty_journal, sample):
+        empty_journal.record_run(sample)
+        empty_journal.record_run(sample)
+        assert len(empty_journal.runs()) == 1
+
+    def test_runs_most_recent_first(self, journal):
+        assert [r.gamekey for r in journal.runs()] == [RUN, OTHER_RUN]
+
+    def test_notes_need_a_recorded_run(self, empty_journal):
+        with pytest.raises(JournalError, match="not recorded"):
+            empty_journal.set_run_note(RUN, "note")
+        with pytest.raises(JournalError, match="not recorded"):
+            empty_journal.set_floor_note(RUN, 1, "note")
+        with pytest.raises(JournalError, match="not recorded"):
+            empty_journal.identify_scroll(RUN, "ZELGO MER", 75)
+
+    def test_delete_run_removes_its_data(self, journal):
+        journal.set_run_note(RUN, "note")
+        journal.set_floor_note(RUN, 1, "floor")
+        journal.identify_scroll(RUN, "ZELGO MER", 75)
+        journal.set_run_note(OTHER_RUN, "keep me")
+
+        journal.delete_run(RUN)
+
+        assert journal.run(RUN) is None
+        assert journal.run_note(RUN) == ""
+        assert journal.floor_notes(RUN) == {}
+        assert journal.scroll_identifications(RUN) == {}
+        assert journal.run_note(OTHER_RUN) == "keep me"
 
 
 # --- Scroll identifications ---------------------------------------------------
@@ -104,7 +196,6 @@ class TestRunNotes:
         journal.set_run_note(RUN, "temp")
         journal.set_run_note(RUN, "")
         assert journal.run_note(RUN) == ""
-        assert journal.runs() == []
 
     def test_unicode_and_newlines_round_trip(self, journal):
         text = "Line 1\nLine 2 — ünïcode ✓"
@@ -137,31 +228,29 @@ class TestFloorNotes:
         assert journal.floor_notes(RUN) == {}
 
 
-class TestRuns:
-    def test_runs_lists_every_run_with_any_data(self, journal):
-        journal.set_run_note(RUN, "note")
-        journal.set_floor_note(OTHER_RUN, 1, "floor")
-        journal.identify_scroll(7, "ZELGO MER", 75)
-        assert journal.runs() == [7, OTHER_RUN, RUN]
-
-    def test_no_runs(self, journal):
-        assert journal.runs() == []
-
-
 # --- Persistence and schema ---------------------------------------------------
 
 
 class TestPersistence:
-    def test_data_survives_reopening(self, tmp_path):
+    def test_data_survives_reopening(self, tmp_path, sample):
         path = tmp_path / "journal.sqlite3"
         with Journal(path) as j:
+            j.record_run(sample)
             j.identify_scroll(RUN, "ZELGO MER", 75)
             j.set_run_note(RUN, "run")
             j.set_floor_note(RUN, 2, "floor")
         with Journal(path) as j:
+            assert j.run(RUN).first_seen == SAMPLE_TIME
             assert j.scroll_identifications(RUN) == {"ZELGO MER": 75}
             assert j.run_note(RUN) == "run"
             assert j.floor_note(RUN, 2) == "floor"
+
+    def test_foreign_keys_enforced_after_reopening(self, tmp_path):
+        # SQLite turns foreign keys off for every new connection unless asked.
+        path = tmp_path / "journal.sqlite3"
+        Journal(path).close()
+        with Journal(path) as j, pytest.raises(JournalError, match="not recorded"):
+            j.set_run_note(RUN, "orphan")
 
     def test_creates_parent_directories(self, tmp_path):
         path = tmp_path / "nested" / "dir" / "journal.sqlite3"
@@ -180,7 +269,6 @@ class TestPersistence:
         journal.identify_scroll(RUN, "ZELGO MER", 77)
         with pytest.raises(JournalError):
             journal.identify_scroll(RUN, "THARR", 77)
-        assert journal.runs() == [RUN]
         assert journal.scroll_identifications(RUN) == {"ZELGO MER": 77}
 
 
