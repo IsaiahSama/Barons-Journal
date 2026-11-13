@@ -1,12 +1,12 @@
 # Data Layer Reference (for building the UI)
 
-This is what the UI can use from Baron's Journal's non-UI code: what each part does, how to call it, and the rules the UI has to follow. Everything here is tested (`uv run pytest`). No GUI toolkit is chosen yet, and nothing in this layer depends on one.
+This is what the UI can use from Baron's Journal's non-UI code: what each part does, how to call it, and the rules the UI has to follow. Everything here is tested (`uv run pytest`). The UI toolkit is **PySide6** (already a dependency), but nothing in these layers imports Qt, and it should stay that way.
 
 ## At a glance
 
 | Package | What it gives the UI | Reads or writes |
 |---|---|---|
-| `barons_journal.data` | The current run's stats, inventory, equipment, and effects, parsed from Barony's save file | Reads the game's save (read-only) |
+| `barons_journal.data` | Finding save files, and the current run's stats, inventory, equipment, and effects parsed from them | Reads the game's saves (read-only) |
 | `barons_journal.data.ids` | Numeric game ID → in-game name lookups (classes, races, items, spells, ...) | Bundled `ids.json` |
 | `barons_journal.reference` | Static game data: scrolls and their 25 labels, the alchemy recipe table, and the floor map (secret levels, artifacts) | Bundled `scrolls.json`, `alchemy.json`, `floors.json` |
 | `barons_journal.journal` | The user's own data in SQLite: runs, scroll identifications, run notes, floor notes | Reads and writes the app's own database |
@@ -16,13 +16,12 @@ The UI should only use the typed objects these packages return. Never read the r
 ## Quick start
 
 ```python
-from pathlib import Path
-
-from barons_journal.data import load_save, InvalidSaveError
+from barons_journal.data import latest_save, load_save, InvalidSaveError
 from barons_journal.journal import Journal, default_journal_path
 from barons_journal.reference import SCROLL_LABELS, SCROLLS
 
-save = load_save(Path.home() / ".barony/savegames/savegame0.baronysave")
+slot = latest_save()                     # most recently written save, or None
+save = load_save(slot.path)
 player = save.player
 print(player.name, player.race_name, player.class_name, "floor", save.dungeon_lvl)
 print(f"HP {player.stats.hp}/{player.stats.max_hp}")
@@ -48,7 +47,20 @@ with Journal(default_journal_path()) as journal:
 
 **Errors:** both raise `InvalidSaveError` (a `ValueError`) when the file isn't usable: it isn't JSON, has the wrong magic cookie, is missing a field, or has bad indices. `UnsupportedVersionError` is a subclass of it, raised for a Barony version the app hasn't been checked against (only `game_version` **502** is supported right now). Catch `InvalidSaveError` to handle both, and show the message: it says what's wrong.
 
-**Where saves live:** on Linux, Barony writes `~/.barony/savegames/savegameN.baronysave` (N is the save slot). Note the extension is `.baronysave`. Windows and macOS locations haven't been worked out yet.
+### Finding saves
+
+| Call | Returns | Notes |
+|---|---|---|
+| `find_saves(dirs=None)` | `list[SaveSlot]` | Every save in the given folders (default: `default_save_dirs()`), most recently written first. Missing folders are skipped and non-save files ignored. Files aren't opened. |
+| `latest_save(dirs=None)` | `SaveSlot \| None` | The most recently written save, which is usually the run being played |
+| `default_save_dirs()` | `list[Path]` | Where Barony keeps saves on this OS, most likely first. Not all of them exist. |
+
+`SaveSlot` fields: `path` (pass it to `load_save`), `slot` (0–99), `multiplayer`, `modded`, `modified` (file time, local).
+
+**Where saves live:** Barony names them `savegame<N>.baronysave`, adding `_mp` for multiplayer and `_modded` with mods (e.g. `savegame2_mp.baronysave`). The extension is `.baronysave`.
+
+- **Linux and macOS:** they're in `~/.barony/savegames`. Epic-only builds use `~/.barony/epicgames/savegames`, and Flatpak Steam on Linux uses `~/.var/app/com.valvesoftware.Steam/.barony/savegames`.
+- **Windows:** they're in the **game's install folder** (`<install>\savegames`). `default_save_dirs()` only covers the default Steam and Epic install locations, so **when `find_saves()` comes back empty, let the user pick the folder** and pass it as `dirs`. Remember the choice in app settings (e.g. `QSettings`).
 
 ### `SaveFile`
 
@@ -350,8 +362,7 @@ Saving an empty string deletes the note. Use `save.dungeon_lvl` for the current 
 
 These are known gaps the UI work will run into. They're not bugs.
 
-- **Finding the save.** Nothing picks the save slot or works out the platform path yet; the path above is the Linux default. There may be several `savegameN.baronysave` slots.
-- **Watching the save.** Nothing refreshes when Barony writes a new save. The planned approach is to watch the file (e.g. with `watchdog`), then `load_save` → `record_run` → refresh the views.
+- **Watching the save (UI's job).** Nothing refreshes when Barony writes a new save; this is for the UI to build with Qt. Watch the save with `QFileSystemWatcher`, adding both the file and its folder: if Barony replaces the file instead of writing to it, the watch on the file is dropped. On change: `load_save` → `journal.record_run(save)` → refresh the views. If the read fails with `InvalidSaveError` (e.g. the file was caught mid-write), keep the last good data and retry shortly after with a `QTimer`. Use `find_saves()` again when the folder changes, to notice a new slot.
 - **Labels on inventory scrolls.** By design (see "How labels work"), the player enters labels by hand.
 - **Hotbar.** `player.hotbar` holds raw values that look like inventory indices, but this isn't confirmed or resolved to `Item`s.
 - **Inventory grid positions** (`x`/`y` in the save) aren't parsed.

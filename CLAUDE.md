@@ -6,23 +6,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Baron's Journal is a native desktop companion app for the game Barony (Python 3.13+, managed with uv). Planned features (from README): read-only stats for the current run, pulled from the save file; scratchpad notes per run and per floor; floor reference info (secret levels, artifacts); and potion recipes.
 
-The project is at an early stage. `main()` in `src/barons_journal/__init__.py` is a stub, `src/barons_journal/data/read_save.py` only has a docstring, and no GUI toolkit has been picked yet. Design notes are in `plans/` (gitignored, local only). Read `plans/initial-review.md` before doing significant work.
+**Status:** the non-UI layers are done and tested: save discovery and parsing (`data`), ID-to-name tables (`data.ids`), reference data for scrolls, alchemy, and floors (`reference`), and the user's SQLite journal (`journal`). **The UI isn't built yet.** `main()` in `src/barons_journal/__init__.py` is still a stub. Design notes are in `plans/` (gitignored, local only).
 
 ## Commands
 
 ```
-uv sync                      # install dependencies
+uv sync                      # install dependencies (includes PySide6)
 uv run barons-journal        # run the app ([project.scripts] entry -> barons_journal:main)
+uv run pytest                # run the tests (pytest is a dev dependency)
+uv run pytest tests/data/test_saves.py::TestFindSaves   # run one file or test
 ```
 
-The README's `uv run main.py` is outdated: there is no `main.py`. pytest isn't a dependency yet. Add it with `uv add --dev pytest`, then run tests with `uv run pytest` or `uv run pytest tests/test_x.py::test_name`.
+The README's `uv run main.py` is outdated: there is no `main.py`.
+
+## Building the UI
+
+**Read `docs/data-layer.md` first.** It covers the public API of the data, reference, and journal packages, and the rules the UI must follow (spoilers, `record_run`, threading).
+
+- **Toolkit: PySide6 (Qt 6).** It's already a dependency. Put UI code in its own package (e.g. `src/barons_journal/ui/`) and keep it out of `data`, `reference`, and `journal`, which must not import Qt.
+- **Finding the save is done:** `barons_journal.data.find_saves()` / `latest_save()` (see the doc). On Windows the saves live in the game's install folder, so the UI should let the user pick the folder when none is found.
+- **Watching the save belongs to the UI.** Use Qt's `QFileSystemWatcher` on the save file (and its folder: Barony may replace the file rather than write to it in place, which drops the watch on the file). On change: `load_save` → `journal.record_run(save)` → refresh the views. A save can be read mid-write, so catch `InvalidSaveError`, keep showing the last good data, and retry shortly after (e.g. with a `QTimer`).
+- **Threading:** parsing a save takes milliseconds, so the main thread is fine. If you move work to a worker thread, keep every `Journal` call on the thread that opened it (see the doc).
 
 ## Architecture
 
-**Building the UI?** Read `docs/data-layer.md` first. It covers the public API of the data, reference, and journal packages, plus the rules the UI must follow (spoilers, `record_run`, threading).
-
 - **Package layout:** src-layout, built with the `uv_build` backend. Code lives in `src/barons_journal/`.
-- **Save parsing (`barons_journal.data`):** Barony's save files are **JSON**. The game writes them as `savegameN.baronysave` in `~/.barony/savegames/` on Linux (the sample in `tests/` is named `.baronsave`). Validate with `magic_cookie == "BARONYJSONSAVE"` and check `game_version`. `tests/save_file_example.baronsave` is a real save to develop and test against. The plan is to keep all raw-dict handling and quirk cleanup inside `data` and give the UI typed models only (`SaveFile`, `Player`, `Stats`, ...).
+- **Save parsing (`barons_journal.data`):** Barony's save files are **JSON**. The game writes them as `savegame<N>.baronysave` (N = slot 0-99; multiplayer adds `_mp` and mods add `_modded` before the extension) in `~/.barony/savegames/` on Linux and macOS, or `<install folder>/savegames` on Windows. `data/saves.py` handles this; the sample in `tests/` is named `.baronsave`. Validate with `magic_cookie == "BARONYJSONSAVE"` and check `game_version`. `tests/save_file_example.baronsave` is a real save to develop and test against. The plan is to keep all raw-dict handling and quirk cleanup inside `data` and give the UI typed models only (`SaveFile`, `Player`, `Stats`, ...).
 - **Where the data is:** the local player is `players[player_num]`. Most stats are under `players[n].stats` (`HP`/`maxHP`, `MP`/`maxMP`, `STR`/`DEX`/`CON`/`INT`/`PER`/`CHR`, `LVL`, `GOLD`, `PROFICIENCIES`). `stats.player_equipment` maps slot names to **indices into `stats.inventory`** (local player only; other players use `npc_equipment`). Learned spells are inventory items of type `SPELL_ITEM` (162) whose `appearance` is the spell ID. `EFFECTS`/`EFFECTS_TIMERS` have 160 slots (only 0-134 are defined); timers are in ticks, 50 per second. `gamekey` stays the same for the whole run, so it's the key for run notes; floor notes use `(gamekey, dungeon_lvl)`.
 - **Save quirks to handle:**
   - The player object has a duplicate `"race"` key. Python's `json` keeps the last one.
