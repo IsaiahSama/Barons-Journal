@@ -7,6 +7,7 @@ from .read_save import (
     load_save,
     parse_save,
 )
+from .saves import SaveSlot, default_save_dirs, find_saves, latest_save
 
 __all__ = [
     "Effect",
@@ -15,8 +16,12 @@ __all__ = [
     "Item",
     "Player",
     "SaveFile",
+    "SaveSlot",
     "Stats",
     "UnsupportedVersionError",
+    "default_save_dirs",
+    "find_saves",
+    "latest_save",
     "load_save",
     "parse_save",
 ]
