@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QLabel,
     QListWidget,
-    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
 )
 
+from ...data import SaveFile
 from ...data.models import Item
-from ..controller import SessionController
-from ..state import ViewState
+from ._stats import ColumnsModel, StatsPanel
 
 _Index = QModelIndex | QPersistentModelIndex
 
@@ -32,7 +31,7 @@ def blessing_text(item: Item) -> str:
     return "uncursed"
 
 
-class BackpackModel(QAbstractTableModel):
+class BackpackModel(ColumnsModel):
     COLUMNS = ("Item", "Count", "Condition", "Blessing")
 
     def __init__(self, parent=None) -> None:
@@ -44,16 +43,8 @@ class BackpackModel(QAbstractTableModel):
         self._items = items
         self.endResetModel()
 
-    def rowCount(self, parent: _Index = QModelIndex()) -> int:
-        return 0 if parent.isValid() else len(self._items)
-
-    def columnCount(self, parent: _Index = QModelIndex()) -> int:
-        return 0 if parent.isValid() else len(self.COLUMNS)
-
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
-            return self.COLUMNS[section]
-        return None
+    def _row_count(self) -> int:
+        return len(self._items)
 
     def data(self, index: _Index, role=Qt.ItemDataRole.DisplayRole):
         if role != Qt.ItemDataRole.DisplayRole or not index.isValid():
@@ -62,9 +53,9 @@ class BackpackModel(QAbstractTableModel):
         return (item.name, item.count, item.status_name, blessing_text(item))[index.column()]
 
 
-class BackpackPanel(QWidget):
+class BackpackPanel(StatsPanel):
     def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+        super().__init__(controller, parent)
         self.model = BackpackModel(self)
         self.table = QTableView()
         self.table.setModel(self.model)
@@ -80,28 +71,13 @@ class BackpackPanel(QWidget):
         inner.addWidget(QLabel("Spells"))
         inner.addWidget(self.spells)
 
-        self.message = QLabel()
-        self.stack = QStackedWidget()
-        self.stack.addWidget(content)
-        self.stack.addWidget(self.message)
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.stack)
+        self._init_stack(content)
 
-        controller.view_changed.connect(self.render)
-        self.render(controller.view())
-
-    def render(self, view: ViewState) -> None:
-        if view.mode != "live" or view.save is None:
-            self.message.setText(
-                "Stats are only available for the live run" if view.mode == "past" else "No run loaded"
-            )
-            self.stack.setCurrentWidget(self.message)
-            return
-        inventory = view.save.player.inventory
+    def _render_live(self, save: SaveFile) -> None:
+        inventory = save.player.inventory
         rows = [i for i in inventory if not i.equipped and not i.is_spell]
         self.model.set_items(rows)
         self.empty_label.setVisible(not rows)
         self.table.setVisible(bool(rows))
         self.spells.clear()
         self.spells.addItems([i.name for i in inventory if i.is_spell])
-        self.stack.setCurrentIndex(0)

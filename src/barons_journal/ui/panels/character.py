@@ -7,16 +7,14 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QProgressBar,
-    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
+from ...data import SaveFile
 from ...data.models import Effect, Equipment
-from ..controller import SessionController
-from ..state import ViewState
+from ._stats import StatsPanel
 
 _ROMAN = {2: "II", 3: "III", 4: "IV", 5: "V"}
 
@@ -42,9 +40,9 @@ def _table(columns: int, rows: int) -> QTableWidget:
     return table
 
 
-class CharacterPanel(QWidget):
+class CharacterPanel(StatsPanel):
     def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+        super().__init__(controller, parent)
         self.hp_bar = QProgressBar()
         self.mp_bar = QProgressBar()
         for bar in (self.hp_bar, self.mp_bar):
@@ -73,24 +71,10 @@ class CharacterPanel(QWidget):
         form.addRow(QLabel("Effects"))
         form.addRow(self.effects_label)
 
-        self.message = QLabel()
-        self.stack = QStackedWidget()
-        self.stack.addWidget(content)
-        self.stack.addWidget(self.message)
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.stack)
+        self._init_stack(content)
 
-        controller.view_changed.connect(self.render)
-        self.render(controller.view())
-
-    def render(self, view: ViewState) -> None:
-        if view.mode != "live" or view.save is None:
-            self.message.setText(
-                "Stats are only available for the live run" if view.mode == "past" else "No run loaded"
-            )
-            self.stack.setCurrentWidget(self.message)
-            return
-        player = view.save.player
+    def _render_live(self, save: SaveFile) -> None:
+        player = save.player
         stats = player.stats
         self.hp_bar.setMaximum(stats.max_hp)
         self.hp_bar.setValue(stats.hp)
@@ -118,7 +102,6 @@ class CharacterPanel(QWidget):
         )
         visible = [effect_text(e) for e in player.effects if not e.hidden]
         self.effects_label.setText("\n".join(visible) if visible else "No active effects")
-        self.stack.setCurrentIndex(0)
 
     @staticmethod
     def _fill(table: QTableWidget, rows: tuple[tuple[str, object], ...]) -> None:
