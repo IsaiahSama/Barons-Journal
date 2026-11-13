@@ -4,7 +4,7 @@ Kept in the app's data folder, never in the game's files. Keys:
 - runs: gamekey (one row per run, updated from each loaded save)
 - scroll identifications: (gamekey, label)
 - run notes: gamekey
-- floor notes: (gamekey, dungeon_lvl)
+- floor notes: (gamekey, dungeon_lvl, secret)
 
 Everything else references ``runs``, so record a run (``record_run``) before
 writing anything for it. Deleting a run deletes its notes and identifications.
@@ -25,7 +25,7 @@ from ..data.ids import CLASSES, RACES
 from .scroll_progress import JournalError, ScrollProgress
 
 APP_DIR_NAME = "barons-journal"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Timestamps are stored as ISO 8601 text, which sorts correctly as a string.
 _SCHEMA_V1 = """
@@ -56,6 +56,25 @@ CREATE TABLE floor_notes (
 );
 """
 
+# SQLite can't change a primary key in place, so floor_notes is rebuilt.
+_MIGRATE_V1_TO_V2 = """
+ALTER TABLE runs ADD COLUMN last_floor_secret INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE floor_notes_v2 (
+    gamekey INTEGER NOT NULL REFERENCES runs ON DELETE CASCADE,
+    dungeon_lvl INTEGER NOT NULL,
+    secret INTEGER NOT NULL DEFAULT 0,
+    body TEXT NOT NULL,
+    PRIMARY KEY (gamekey, dungeon_lvl, secret)
+);
+INSERT INTO floor_notes_v2 (gamekey, dungeon_lvl, secret, body)
+    SELECT gamekey, dungeon_lvl, 0, body FROM floor_notes;
+DROP TABLE floor_notes;
+ALTER TABLE floor_notes_v2 RENAME TO floor_notes;
+"""
+
+# Step n upgrades a journal from version n to n + 1; a new database runs them all.
+_MIGRATIONS = (_SCHEMA_V1, _MIGRATE_V1_TO_V2)
+
 
 @dataclass(frozen=True, slots=True)
 class Run:
@@ -66,6 +85,7 @@ class Run:
     char_class: int
     race: int
     last_floor: int
+    last_floor_secret: bool
     first_seen: datetime
     last_seen: datetime
 
@@ -110,8 +130,8 @@ class Journal:
             raise JournalError(
                 f"Journal schema version {version} is newer than this app supports ({SCHEMA_VERSION})"
             )
-        if version == 0:
-            self._conn.executescript(f"BEGIN; {_SCHEMA_V1} PRAGMA user_version = {SCHEMA_VERSION}; COMMIT;")
+        for step in range(version, SCHEMA_VERSION):
+            self._conn.executescript(f"BEGIN; {_MIGRATIONS[step]} PRAGMA user_version = {step + 1}; COMMIT;")
 
     def close(self) -> None:
         self._conn.close()
@@ -146,14 +166,17 @@ class Journal:
         with self._conn:
             self._conn.execute(
                 """
-                INSERT INTO runs (gamekey, character_name, char_class, race, last_floor, first_seen, last_seen)
-                VALUES (:gamekey, :name, :char_class, :race, :floor, :seen, :seen)
+                INSERT INTO runs (gamekey, character_name, char_class, race, last_floor, last_floor_secret, first_seen, last_seen)
+                VALUES (:gamekey, :name, :char_class, :race, :floor, :secret, :seen, :seen)
                 ON CONFLICT (gamekey) DO UPDATE SET
                     first_seen = min(first_seen, excluded.first_seen),
                     character_name = iif(excluded.last_seen >= last_seen, excluded.character_name, character_name),
                     char_class = iif(excluded.last_seen >= last_seen, excluded.char_class, char_class),
                     race = iif(excluded.last_seen >= last_seen, excluded.race, race),
                     last_floor = iif(excluded.last_seen >= last_seen, excluded.last_floor, last_floor),
+                    last_floor_secret = iif(
+                        excluded.last_seen >= last_seen, excluded.last_floor_secret, last_floor_secret
+                    ),
                     last_seen = max(last_seen, excluded.last_seen)
                 """,
                 {
@@ -162,6 +185,7 @@ class Journal:
                     "char_class": save.player.char_class,
                     "race": save.player.race,
                     "floor": save.dungeon_lvl,
+                    "secret": int(save.in_secret_level),
                     "seen": seen,
                 },
             )
@@ -231,49 +255,54 @@ class Journal:
         else:
             self._write(gamekey, "DELETE FROM run_notes WHERE gamekey = ?", (gamekey,))
 
-    def floor_note(self, gamekey: int, dungeon_lvl: int) -> str:
+    def floor_note(self, gamekey: int, dungeon_lvl: int, *, secret: bool = False) -> str:
+        """The note for a main floor, or for the secret level at that depth with ``secret=True``."""
         row = self._conn.execute(
-            "SELECT body FROM floor_notes WHERE gamekey = ? AND dungeon_lvl = ?", (gamekey, dungeon_lvl)
+            "SELECT body FROM floor_notes WHERE gamekey = ? AND dungeon_lvl = ? AND secret = ?",
+            (gamekey, dungeon_lvl, int(secret)),
         ).fetchone()
         return row[0] if row else ""
 
-    def floor_notes(self, gamekey: int) -> dict[int, str]:
-        """Floor -> note, for every floor of this run that has one, in floor order."""
+    def floor_notes(self, gamekey: int) -> dict[tuple[int, bool], str]:
+        """(Depth, is secret level) -> note, for this run, by depth with the main floor first."""
         rows = self._conn.execute(
-            "SELECT dungeon_lvl, body FROM floor_notes WHERE gamekey = ? ORDER BY dungeon_lvl", (gamekey,)
+            "SELECT dungeon_lvl, secret, body FROM floor_notes WHERE gamekey = ? ORDER BY dungeon_lvl, secret",
+            (gamekey,),
         )
-        return dict(rows.fetchall())
+        return {(lvl, bool(secret)): body for lvl, secret, body in rows}
 
-    def set_floor_note(self, gamekey: int, dungeon_lvl: int, body: str) -> None:
+    def set_floor_note(self, gamekey: int, dungeon_lvl: int, body: str, *, secret: bool = False) -> None:
         """Save a floor's note. An empty note deletes it."""
         if body:
             self._write(
                 gamekey,
-                "INSERT INTO floor_notes (gamekey, dungeon_lvl, body) VALUES (?, ?, ?) "
-                "ON CONFLICT (gamekey, dungeon_lvl) DO UPDATE SET body = excluded.body",
-                (gamekey, dungeon_lvl, body),
+                "INSERT INTO floor_notes (gamekey, dungeon_lvl, secret, body) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (gamekey, dungeon_lvl, secret) DO UPDATE SET body = excluded.body",
+                (gamekey, dungeon_lvl, int(secret), body),
             )
         else:
             self._write(
                 gamekey,
-                "DELETE FROM floor_notes WHERE gamekey = ? AND dungeon_lvl = ?",
-                (gamekey, dungeon_lvl),
+                "DELETE FROM floor_notes WHERE gamekey = ? AND dungeon_lvl = ? AND secret = ?",
+                (gamekey, dungeon_lvl, int(secret)),
             )
 
 
 _RUN_SELECT = (
-    "SELECT gamekey, character_name, char_class, race, last_floor, first_seen, last_seen FROM runs"
+    "SELECT gamekey, character_name, char_class, race, last_floor, last_floor_secret, "
+    "first_seen, last_seen FROM runs"
 )
 
 
 def _run_from_row(row: tuple) -> Run:
-    gamekey, name, char_class, race, last_floor, first_seen, last_seen = row
+    gamekey, name, char_class, race, last_floor, last_floor_secret, first_seen, last_seen = row
     return Run(
         gamekey=gamekey,
         character_name=name,
         char_class=char_class,
         race=race,
         last_floor=last_floor,
+        last_floor_secret=bool(last_floor_secret),
         first_seen=datetime.fromisoformat(first_seen),
         last_seen=datetime.fromisoformat(last_seen),
     )

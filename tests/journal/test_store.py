@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import barons_journal.journal.store as store
 from barons_journal.data import SaveFile, load_save
 from barons_journal.journal import Journal, JournalError, Run, default_journal_path
 from barons_journal.reference import scroll_by_item_id
@@ -56,9 +57,15 @@ class TestRuns:
         (run,) = empty_journal.runs()
         assert run == Run(
             gamekey=RUN, character_name="Moonshine", char_class=1, race=0,
-            last_floor=0, first_seen=SAMPLE_TIME, last_seen=SAMPLE_TIME,
+            last_floor=0, last_floor_secret=False, first_seen=SAMPLE_TIME, last_seen=SAMPLE_TIME,
         )
         assert (run.class_name, run.race_name) == ("Warrior", "Human")
+
+    def test_run_remembers_secret_location(self, empty_journal, secret_save_path):
+        save = load_save(secret_save_path)
+        empty_journal.record_run(save)
+        run = empty_journal.run(save.gamekey)
+        assert (run.last_floor, run.last_floor_secret) == (3, True)
 
     def test_get_run(self, journal):
         assert journal.run(RUN).character_name == "Moonshine"
@@ -220,12 +227,26 @@ class TestFloorNotes:
         journal.set_floor_note(RUN, 5, "five")
         journal.set_floor_note(RUN, 1, "one")
         journal.set_floor_note(OTHER_RUN, 2, "other")
-        assert journal.floor_notes(RUN) == {1: "one", 5: "five"}
+        assert journal.floor_notes(RUN) == {(1, False): "one", (5, False): "five"}
 
     def test_empty_note_deletes(self, journal):
         journal.set_floor_note(RUN, 3, "temp")
         journal.set_floor_note(RUN, 3, "")
         assert journal.floor_notes(RUN) == {}
+
+
+    def test_secret_level_note_is_separate(self, journal):
+        journal.set_floor_note(RUN, 3, "main three")
+        journal.set_floor_note(RUN, 3, "gnomes", secret=True)
+        assert journal.floor_note(RUN, 3) == "main three"
+        assert journal.floor_note(RUN, 3, secret=True) == "gnomes"
+        assert journal.floor_notes(RUN) == {(3, False): "main three", (3, True): "gnomes"}
+
+    def test_empty_secret_note_deletes_only_that_note(self, journal):
+        journal.set_floor_note(RUN, 3, "main")
+        journal.set_floor_note(RUN, 3, "gnomes", secret=True)
+        journal.set_floor_note(RUN, 3, "", secret=True)
+        assert journal.floor_notes(RUN) == {(3, False): "main"}
 
 
 # --- Persistence and schema ---------------------------------------------------
@@ -245,6 +266,20 @@ class TestPersistence:
             assert j.run_note(RUN) == "run"
             assert j.floor_note(RUN, 2) == "floor"
 
+    def test_v1_journal_is_upgraded(self, tmp_path):
+        path = tmp_path / "j.sqlite3"
+        with closing(sqlite3.connect(path)) as conn:
+            conn.executescript(store._SCHEMA_V1 + "PRAGMA user_version = 1;")
+            conn.execute("INSERT INTO runs VALUES (1, 'A', 1, 0, 4, '2026-01-01T00:00:00', '2026-01-01T00:00:00')")
+            conn.execute("INSERT INTO floor_notes VALUES (1, 4, 'old note')")
+            conn.commit()
+        with Journal(path) as j:
+            assert j.floor_notes(1) == {(4, False): "old note"}
+            assert j.run(1).last_floor_secret is False
+            j.set_floor_note(1, 4, "secret", secret=True)  # new key works
+        with closing(sqlite3.connect(path)) as conn:
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+
     def test_foreign_keys_enforced_after_reopening(self, tmp_path):
         # SQLite turns foreign keys off for every new connection unless asked.
         path = tmp_path / "journal.sqlite3"
@@ -261,7 +296,7 @@ class TestPersistence:
     def test_newer_schema_is_refused(self, tmp_path):
         path = tmp_path / "journal.sqlite3"
         with closing(sqlite3.connect(path)) as conn:  # sqlite3's own `with` doesn't close
-            conn.execute("PRAGMA user_version = 999")
+            conn.execute(f"PRAGMA user_version = {store.SCHEMA_VERSION + 1}")
         with pytest.raises(JournalError, match="newer"):
             Journal(path)
 

@@ -295,7 +295,7 @@ The folder is created automatically. Open the journal with `Journal(path)`, idea
 | `run(gamekey)` | `Run \| None` | One run |
 | `delete_run(gamekey)` | — | Deletes the run **and all of its notes and scroll identifications**. Ask the user to confirm first. |
 
-`Run` fields: `gamekey`, `character_name`, `char_class`, `race`, `last_floor`, `first_seen`, `last_seen` (both `datetime`, taken from the save's own timestamps), plus the `class_name` and `race_name` properties.
+`Run` fields: `gamekey`, `character_name`, `char_class`, `race`, `last_floor`, `last_floor_secret` (`bool`, true if the last save was in a secret level), `first_seen`, `last_seen` (both `datetime`, taken from the save's own timestamps), plus the `class_name` and `race_name` properties.
 
 ### Scroll identifications
 
@@ -335,15 +335,15 @@ A "still to find" panel can show `remaining` (e.g. "scroll of fire: 2 labels lef
 
 ### Notes
 
-Each run has one free-text scratchpad note, and each floor of a run has one note.
+Each run has one free-text scratchpad note, and each floor of a run has one note. A secret level has its own note, separate from the main floor at the same depth (`secret=True`; its depth is `save.dungeon_lvl`, and `save.in_secret_level` says whether the player is in one).
 
 | Call | Returns |
 |---|---|
 | `run_note(gamekey)` | `str` (`""` if none) |
 | `set_run_note(gamekey, body)` | — |
-| `floor_note(gamekey, dungeon_lvl)` | `str` (`""` if none) |
-| `set_floor_note(gamekey, dungeon_lvl, body)` | — |
-| `floor_notes(gamekey)` | `dict[int, str]`: every floor of the run with a note, in floor order |
+| `floor_note(gamekey, dungeon_lvl, *, secret=False)` | `str` (`""` if none) |
+| `set_floor_note(gamekey, dungeon_lvl, body, *, secret=False)` | — |
+| `floor_notes(gamekey)` | `dict[tuple[int, bool], str]`: `(dungeon_lvl, secret)` -> note for every floor of the run with a note, ordered by depth with the main floor before the secret level |
 
 Saving an empty string deletes the note. Use `save.dungeon_lvl` for the current floor.
 
