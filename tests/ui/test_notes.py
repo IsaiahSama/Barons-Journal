@@ -111,7 +111,14 @@ def _go_to(controller, raw_save, lvl, secret=0):
     controller.reload()
 
 
-def test_panel_follows_floor_when_unfocused(notes_panel, controller, raw_save):
+def _unfocused(notes_panel, monkeypatch):
+    """Offscreen, a shown window may focus the floor editor on its own."""
+    monkeypatch.setattr(notes_panel, "_floor_editor_active", lambda: False)
+    monkeypatch.setattr(notes_panel.floor_editor, "hasFocus", lambda: False)
+
+
+def test_panel_follows_floor_when_unfocused(notes_panel, controller, raw_save, monkeypatch):
+    _unfocused(notes_panel, monkeypatch)
     assert notes_panel.showing_location() == Location(0)
     _go_to(controller, raw_save, 1)
     assert notes_panel.showing_location() == Location(1)
@@ -140,7 +147,8 @@ def test_run_note_saves_and_flushes_on_about_to_change(notes_panel, controller):
     assert controller.run_note(LIVE) == "plan"
 
 
-def test_floor_note_changed_reloads_unfocused_editor(notes_panel, controller):
+def test_floor_note_changed_reloads_unfocused_editor(notes_panel, controller, monkeypatch):
+    _unfocused(notes_panel, monkeypatch)
     controller.save_floor_note(LIVE, Location(0), "from elsewhere")
     assert notes_panel.floor_editor.toPlainText() == "from elsewhere"
 
@@ -156,7 +164,10 @@ def test_past_run_notes_are_read_only(notes_panel, controller_with_two_runs, jou
     assert not notes_panel.run_editor.isReadOnly()
 
 
-def test_secret_level_note_separate_in_panel(notes_panel, controller, raw_save, journal):
+def test_secret_level_note_separate_in_panel(
+    notes_panel, controller, raw_save, journal, monkeypatch
+):
+    _unfocused(notes_panel, monkeypatch)
     journal.set_floor_note(LIVE, 3, "main three")
     _go_to(controller, raw_save, 3, 1)
     assert notes_panel.showing_location() == Location(3, True)

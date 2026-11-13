@@ -178,8 +178,10 @@ def test_geometry_restored(controller, settings, qtbot):
     w = _make(controller, settings, qtbot)
     w.resize(900, 700)
     w.close()
-    assert isinstance(settings.geometry, QByteArray)
-    w2 = _make(controller, settings, qtbot, start=False)
+    saved = settings.geometry
+    assert isinstance(saved, QByteArray)
+    w2 = MainWindow(controller, settings)  # not shown: no window-manager sizing involved
+    qtbot.addWidget(w2)
     assert w2.size().width() == 900
 
 
