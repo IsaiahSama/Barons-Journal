@@ -151,3 +151,24 @@ class TestValidation:
     def test_missing_file_raises_file_not_found(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             load_save(tmp_path / "nope.baronsave")
+
+
+class TestSecretLevel:
+    def test_main_floor_sample_is_not_secret(self, sample_save_path):
+        assert load_save(sample_save_path).in_secret_level is False
+
+    def test_gnomish_mines_save_is_secret(self, secret_save_path):
+        save = load_save(secret_save_path)
+        assert (save.dungeon_lvl, save.in_secret_level) == (3, True)
+        assert save.player.name == "Testng"
+
+    @pytest.mark.parametrize("value", [2, -1, "1", None])
+    def test_bad_level_track_is_invalid(self, raw_save, value):
+        raw_save["level_track"] = value
+        with pytest.raises(InvalidSaveError, match="level_track"):
+            parse_save(raw_save)
+
+    def test_missing_level_track_is_invalid(self, raw_save):
+        del raw_save["level_track"]
+        with pytest.raises(InvalidSaveError, match="level_track"):
+            parse_save(raw_save)

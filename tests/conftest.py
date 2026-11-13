@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 SAMPLE_SAVE = Path(__file__).parent / "save_file_example.baronsave"
+SECRET_SAVE = Path(__file__).parent / "save_file_secret_level.baronsave"
 
 
 @pytest.fixture(scope="session")
@@ -16,6 +17,12 @@ def _sample_raw() -> dict:
 def sample_save_path() -> Path:
     """Path to the real Barony save checked into the repo."""
     return SAMPLE_SAVE
+
+
+@pytest.fixture
+def secret_save_path() -> Path:
+    """Path to a real save taken inside a secret level (Gnomish Mines)."""
+    return SECRET_SAVE
 
 
 @pytest.fixture

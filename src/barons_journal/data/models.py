@@ -162,3 +162,5 @@ class SaveFile:
     """When Barony wrote the save, in local time (no timezone)."""
     player: Player
     """The local player (``players[player_num]`` in the raw save)."""
+    in_secret_level: bool
+    """True inside a secret level, from the save's ``level_track``."""

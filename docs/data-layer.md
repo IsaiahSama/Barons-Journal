@@ -72,6 +72,7 @@ with Journal(default_journal_path()) as journal:
 | `dungeon_lvl` | `int` | Current floor (0 is the first floor) |
 | `timestamp` | `datetime` | When Barony wrote the save (local time, no timezone) |
 | `player` | `Player` | The local player |
+| `in_secret_level` | `bool` | True inside a secret level (the save's `level_track`) |
 
 ### `Player`
 
@@ -216,6 +217,8 @@ Unidentified potions follow rule 1 like any other item: the save stores their tr
 ## 3c. Floor map: `barons_journal.reference` (from `reference.floors`)
 
 Floors are numbered by `dungeon_lvl`, the same number as `SaveFile.dungeon_lvl` (0 is the Minehead, 35 is the Citadel Sanctum), so the current save's floor maps straight onto this table.
+
+A location is `(dungeon_lvl, in_secret_level)`. Use `secret_level_at(dungeon_lvl)` when `in_secret_level` is True; it can be `None` for undocumented secret levels.
 
 | Name | Type | Meaning |
 |---|---|---|

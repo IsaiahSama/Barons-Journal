@@ -61,6 +61,10 @@ def parse_save(raw: Any) -> SaveFile:
             f"player_num {player_num!r} out of range for {len(players)} players"
         )
 
+    level_track = _require(raw, "level_track")
+    if isinstance(level_track, bool) or not isinstance(level_track, int) or level_track not in (0, 1):
+        raise InvalidSaveError(f"level_track must be 0 or 1, got {level_track!r}")
+
     return SaveFile(
         game_version=version,
         game_name=_clean_name(_require(raw, "game_name")),
@@ -68,6 +72,7 @@ def parse_save(raw: Any) -> SaveFile:
         dungeon_lvl=_require(raw, "dungeon_lvl"),
         timestamp=_parse_timestamp(_require(raw, "timestamp")),
         player=_parse_player(players[player_num]),
+        in_secret_level=level_track == 1,
     )
 
 
