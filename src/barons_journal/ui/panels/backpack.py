@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -15,6 +17,9 @@ from PySide6.QtWidgets import (
 from ...data import SaveFile
 from ...data.models import Item
 from ._stats import ColumnsModel, StatsPanel
+
+if TYPE_CHECKING:
+    from ..controller import SessionController
 
 _Index = QModelIndex | QPersistentModelIndex
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFormLayout,
@@ -15,6 +17,9 @@ from PySide6.QtWidgets import (
 from ...data import SaveFile
 from ...data.models import Effect, Equipment
 from ._stats import StatsPanel
+
+if TYPE_CHECKING:
+    from ..controller import SessionController
 
 _ROMAN = {2: "II", 3: "III", 4: "IV", 5: "V"}
 
