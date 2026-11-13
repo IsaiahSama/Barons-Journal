@@ -4,7 +4,7 @@ import shutil
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import QAbstractListModel, Qt  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QAbstractButton,
     QAbstractItemView,
@@ -49,14 +49,15 @@ def _model_text(view: QAbstractItemView) -> list[str]:
     if model is None:
         return out
     roles = (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole)
-    for section in range(model.columnCount()):
+    columns = 1 if isinstance(model, QAbstractListModel) else model.columnCount()
+    for section in range(columns):
         for role in roles:
             out.append(str(model.headerData(section, Qt.Orientation.Horizontal, role) or ""))
     for section in range(model.rowCount()):
         for role in roles:
             out.append(str(model.headerData(section, Qt.Orientation.Vertical, role) or ""))
     for row in range(model.rowCount()):
-        for col in range(model.columnCount()):
+        for col in range(columns):
             index = model.index(row, col)
             for role in roles:
                 out.append(str(model.data(index, role) or ""))
