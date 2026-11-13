@@ -8,7 +8,7 @@ This is what the UI can use from Baron's Journal's non-UI code: what each part d
 |---|---|---|
 | `barons_journal.data` | The current run's stats, inventory, equipment, and effects, parsed from Barony's save file | Reads the game's save (read-only) |
 | `barons_journal.data.ids` | Numeric game ID → in-game name lookups (classes, races, items, spells, ...) | Bundled `ids.json` |
-| `barons_journal.reference` | Static scroll data: the 16 scroll types and the 25 unidentified labels | Bundled `scrolls.json` |
+| `barons_journal.reference` | Static game data: scrolls and their 25 labels, the alchemy recipe table, and the floor map (secret levels, artifacts) | Bundled `scrolls.json`, `alchemy.json`, `floors.json` |
 | `barons_journal.journal` | The user's own data in SQLite: runs, scroll identifications, run notes, floor notes | Reads and writes the app's own database |
 
 The UI should only use the typed objects these packages return. Never read the raw save JSON or query the SQLite database directly.
@@ -175,6 +175,90 @@ Also available: `HIDDEN_EFFECTS` (a frozenset of effect IDs the game doesn't sho
 - So finding out that "ZELGO MER" is fire does **not** mean fire is ruled out for the other labels. Fire is only ruled out once all 3 of its labels are found. `ScrollProgress` (below) does this counting, so the UI doesn't have to.
 - **The app can't read an inventory scroll's label from the save.** The player reads the label in-game and picks it from `SCROLL_LABELS` in the UI.
 
+## 3b. Alchemy: `barons_journal.reference` (from `reference.alchemy`)
+
+The alembic has a **base** slot and a **secondary** slot. All values are item IDs; get names with `ITEMS.label(id)`, or the `*_name` properties on `Recipe`.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `BASE_INGREDIENTS` | `tuple[int, ...]` | What fits the base slot: water, polymorph, booze, fruit juice, acid, invisibility |
+| `SECONDARY_INGREDIENTS` | `tuple[int, ...]` | What fits the secondary slot: water, sickness, confusion, cure ailment, blindness, restore magic, speed, polymorph |
+| `RECIPES` | `tuple[Recipe, ...]` | The 24 fixed recipes, ordered by base then secondary, which suits a grid with bases as rows and secondaries as columns |
+| `mix(base, secondary)` | `Mix` | What any valid pair does, rules included. Raises `ValueError` if a potion can't go in that slot. |
+| `recipes_making(result)` | `tuple[Recipe, ...]` | Reverse lookup, e.g. "how do I make a potion of healing?" |
+
+`Recipe` has `base`, `secondary`, `result` (item IDs) and `base_name`, `secondary_name`, `result_name`.
+
+`Mix` has `kind` and `potion`. The kinds are:
+
+| `kind` | Meaning | `potion` |
+|---|---|---|
+| `"potion"` | A fixed recipe | The result |
+| `"duplicate"` | Water copies the other ingredient (you get two) | The potion that's duplicated |
+| `"random"` | Polymorph in either slot gives a random potion. This beats water's duplicating and acid's explosion. | `None` |
+| `"explodes"` | Acid and water explode | `None` |
+| `"same"` | The same potion in both slots (water + water, polymorph + polymorph) | That potion |
+
+Unidentified potions follow rule 1 like any other item: the save stores their true type, so a recipe helper must only offer potions the player has identified.
+
+## 3c. Floor map: `barons_journal.reference` (from `reference.floors`)
+
+Floors are numbered by `dungeon_lvl`, the same number as `SaveFile.dungeon_lvl` (0 is the Minehead, 35 is the Citadel Sanctum), so the current save's floor maps straight onto this table.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `FLOORS` | `tuple[Floor, ...]` | All 36 main floors; `FLOORS[n]` is floor `n` |
+| `floor_at(n)` | `Floor` | Same, with a `KeyError` past the last floor |
+| `SECRET_LEVELS` | `tuple[SecretLevel, ...]` | All 13 secret levels, by depth |
+| `secret_level_at(n)` | `SecretLevel \| None` | The secret level at depth `n` |
+| `artifact_locations()` | `dict[int, tuple[SecretLevel, ...]]` | Artifact item ID → where it can be found |
+| `orb_floors()` | `dict[int, Floor]` | Mystic orb item ID → the main floor it's on |
+
+**`Floor`:** `dungeon_lvl`; `area` (compendium name: "Mines", "Swamps", "Transition Floor", "Lich's Bastion", ...); `secret_entrance` (the `SecretLevel` it leads to, or `None`); `secret_entrance_chance` (`1.0` if always there, `0.5` if only some runs have it, `None` if no entrance); `orb` / `orb_name` (the mystic orb this floor always has a room for, or `None`).
+
+**`SecretLevel`:**
+
+| Field | Meaning |
+|---|---|
+| `dungeon_lvl` | Depth. Use it as the key: the Underworld appears at depths 6, 7, 19 and 20. |
+| `name` | "Gnomish Mines", "Haunted Castle", "Bram's Castle", ... |
+| `entrance_floor` | The main floor whose secret entrance leads here (always `dungeon_lvl - 1`), or `None` |
+| `previous` | For the Underworld's second floors only: `"Underworld"`, reached by trapdoor from the first floor |
+| `treasures` | The compendium's treasure lines as written, e.g. `("Oracle's Treads", "Hidden treasure chests", "4 Potions of levitation")` |
+| `artifacts`, `artifact_names` | The artifacts among the treasures, as item IDs and as names |
+
+**The map at a glance:**
+
+| Secret entrance on floor | Leads to (depth) | Artifact |
+|---|---|---|
+| 2 | Gnomish Mines (3) | Sphinx's Casque |
+| 3 (50% of runs) | Minetown (4) | — |
+| 5 | Underworld (6), then trapdoor to Underworld (7) | Khryselakatos (on 7) |
+| 7 | Temple (8) | — |
+| 8 | Haunted Castle (9) | Oracle's Treads |
+| 11 | Sokoban (12) | Djinni's Brace |
+| 13 | Minotaur Maze (14) | Gungnir |
+| 16 | Mystic Library (17) | — |
+| 18 | Underworld (19), then trapdoor to Underworld (20) | Khryselakatos (on 20) |
+| 28 | Cockatrice Lair (29) | Dragon's Mail |
+| 33 | Bram's Castle (34) | Wraith's Gown |
+
+**Mystic orbs.** These floors always get the room that holds an orb (`orb_floors` in `maps.cpp`). The orbs go on the pedestals in the Lich's Bastion (floor 20); per the compendium, green improves DEX and PER, red improves STR and CON, and blue improves INT and magic resistance.
+
+| Floor | Area | Orb |
+|---|---|---|
+| 8 | Swamps | green mystic orb |
+| 13 | Labyrinth | red mystic orb |
+| 18 | Ruins | blue mystic orb |
+
+The purple mystic orb isn't placed on any floor.
+
+**Not covered:**
+
+- **Exits from secret levels.** A secret level's exit usually returns you to the main dungeon, but some may lead on to the next secret level. That's set per exit in the game's binary map files, so it isn't covered.
+- **Floor 23's secret entrance.** The game code gives floor 23 one, but it leads to a line of the secret list (`boss`) that the compendium doesn't describe, so it's left out.
+- **Artifacts found elsewhere.** Artifacts like Dyrnwyn, Sharur and Parashu aren't secret-level treasures in the compendium, so they aren't on the map.
+
 ---
 
 ## 4. The user's journal: `barons_journal.journal`
@@ -272,7 +356,7 @@ These are known gaps the UI work will run into. They're not bugs.
 - **Hotbar.** `player.hotbar` holds raw values that look like inventory indices, but this isn't confirmed or resolved to `Item`s.
 - **Inventory grid positions** (`x`/`y` in the save) aren't parsed.
 - **Other players in multiplayer.** Only the local player is parsed.
-- **Potion recipes and floor reference data** (secret levels, artifacts) from the README aren't built yet.
+- **Learned alchemy recipes.** The save's player-level `recipes` field holds the recipes the player has learned, which would let the UI mark known recipes. It isn't parsed yet: its JSON shape is unconfirmed because the sample save's list is empty.
 - **Item display extras** like "+2 blessed" or "(cursed)" prefixes aren't formatted for you. The raw `beatitude` is available, but the player only knows it once the item is identified, so apply rule 1 here too.
 
 ## Running and testing
