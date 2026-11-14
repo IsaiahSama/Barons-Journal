@@ -17,10 +17,12 @@ class HeaderPanel(QWidget):
         self._controller = controller
 
         self.title = QLabel()
+        self.title.setObjectName("runTitle")
         font = self.title.font()
         font.setBold(True)
         self.title.setFont(font)
         self.caption = QLabel()
+        self.caption.setProperty("role", "muted")
         self.banner_label = QLabel()
         self.banner_label.setWordWrap(True)
         self.banner_button = QPushButton()

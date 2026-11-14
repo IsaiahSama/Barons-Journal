@@ -26,6 +26,7 @@ class NotesPanel(QWidget):
         """A view for a new floor, waiting for the user to switch."""
 
         self.floor_title = QLabel()
+        self.floor_title.setProperty("role", "section")
         self.floor_editor = NoteEditor()
         self.switch_label = QLabel()
         self.switch_button = QPushButton("Switch")
@@ -41,7 +42,9 @@ class NotesPanel(QWidget):
         layout.addWidget(self.floor_title)
         layout.addWidget(self.switch_prompt)
         layout.addWidget(self.floor_editor, 1)
-        layout.addWidget(QLabel("Run notes"))
+        run_title = QLabel("Run notes")
+        run_title.setProperty("role", "section")
+        layout.addWidget(run_title)
         layout.addWidget(self.run_editor, 1)
 
         self.switch_button.clicked.connect(self._switch)

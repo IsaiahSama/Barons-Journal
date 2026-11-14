@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -30,6 +31,7 @@ from .panels.notes import NotesPanel
 from .panels.scrolls import ScrollsPanel
 from .settings import AppSettings
 from .state import ViewState
+from .theme import THEMES, apply_theme
 
 
 class MainWindow(QMainWindow):
@@ -139,10 +141,25 @@ class MainWindow(QMainWindow):
             action.setChecked(visible)
             action.toggled.connect(lambda on, w=which: self.layouts.set_panel_visible(w, on))
             view_menu.addAction(action)
+        theme_menu = view_menu.addMenu("Theme")
+        theme_group = QActionGroup(self)
+        theme_group.setExclusive(True)
+        for name, text in THEMES:
+            action = self._action(f"theme_{name}", text, checkable=True)
+            action.setChecked(self._settings.theme == name)
+            action.triggered.connect(lambda _checked=False, n=name: self._apply_theme(n))
+            theme_group.addAction(action)
+            theme_menu.addAction(action)
 
     def _apply_layout(self, name) -> None:
         if name != self.layouts.current:
             self.layouts.apply(name)
+
+    def _apply_theme(self, name) -> None:
+        self._settings.theme = name
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            apply_theme(app, name)
 
     def _on_view(self, view: ViewState) -> None:
         self.stack.setCurrentIndex(0 if view.mode == "empty" else 1)

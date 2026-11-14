@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from ..journal import Journal, default_journal_path
 from .settings import AppSettings
+from .theme import apply_theme
 
 
 def run() -> int:
@@ -20,6 +21,7 @@ def run() -> int:
     app.setOrganizationName("barons-journal")
     app.setStyle("Fusion")
     settings = AppSettings()
+    apply_theme(app, settings.theme)
     with Journal(default_journal_path()) as journal:
         controller = SessionController(journal, settings)
         window = MainWindow(controller, settings)

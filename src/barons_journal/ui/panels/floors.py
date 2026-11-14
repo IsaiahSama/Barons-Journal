@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QItemSelectionModel, QModelIndex, QPersistentModelIndex, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPalette
+from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -110,8 +110,8 @@ class FloorsModel(ColumnsModel):
                 font.setBold(True)
                 return font
             if role == Qt.ItemDataRole.BackgroundRole:
-                color = QColor(QPalette().color(QPalette.ColorRole.Highlight))
-                color.setAlpha(50)
+                color = QColor(QGuiApplication.palette().color(QPalette.ColorRole.Highlight))
+                color.setAlpha(90)
                 return QBrush(color)
         return None
 

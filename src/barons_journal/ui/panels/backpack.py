@@ -72,6 +72,7 @@ class BackpackPanel(StatsPanel):
         self.empty_label = QLabel("Backpack is empty")
         self.spells = QListWidget()
         self.spells_label = QLabel("Spells")
+        self.spells_label.setProperty("role", "section")
 
         content = QWidget()
         inner = QVBoxLayout(content)

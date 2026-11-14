@@ -7,6 +7,8 @@ from typing import Literal
 
 from PySide6.QtCore import QByteArray, QSettings
 
+from .theme import ThemeName
+
 LayoutName = Literal["focus", "dashboard"]
 
 
@@ -37,6 +39,14 @@ class AppSettings:
     @layout.setter
     def layout(self, value: LayoutName) -> None:
         self._q.setValue("layout", value)
+
+    @property
+    def theme(self) -> ThemeName:
+        return "system" if self._q.value("theme", "barony") == "system" else "barony"
+
+    @theme.setter
+    def theme(self, value: ThemeName) -> None:
+        self._q.setValue("theme", value)
 
     @property
     def save_dir(self) -> Path | None:

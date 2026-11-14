@@ -50,6 +50,12 @@ def _table(columns: int, rows: int) -> QTableWidget:
     return table
 
 
+def _section(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setProperty("role", "section")
+    return label
+
+
 def _fit_height(table: QTableWidget) -> None:
     """Show every row: the panel scrolls as a whole instead of each table."""
     rows = sum(table.rowHeight(r) for r in range(table.rowCount()))
@@ -61,6 +67,8 @@ class CharacterPanel(StatsPanel):
         super().__init__(controller, parent)
         self.hp_bar = QProgressBar()
         self.mp_bar = QProgressBar()
+        self.hp_bar.setObjectName("hpBar")
+        self.mp_bar.setObjectName("mpBar")
         for bar in (self.hp_bar, self.mp_bar):
             bar.setFormat("%v/%m")
         self.level_label = QLabel()
@@ -80,11 +88,11 @@ class CharacterPanel(StatsPanel):
         form.addRow("Gold", self.gold_label)
         form.addRow("Hunger", self.hunger_label)
         form.addRow(self.attributes)
-        form.addRow(QLabel("Skills"))
+        form.addRow(_section("Skills"))
         form.addRow(self.skills)
-        form.addRow(QLabel("Equipment"))
+        form.addRow(_section("Equipment"))
         form.addRow(self.equipment)
-        form.addRow(QLabel("Effects"))
+        form.addRow(_section("Effects"))
         form.addRow(self.effects_label)
 
         scroll = QScrollArea()
