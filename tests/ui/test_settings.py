@@ -46,3 +46,16 @@ def test_follow_can_be_cleared(tmp_path):
     first.follow = Path("/x")
     first.follow = None
     assert AppSettings(path).follow is None
+
+
+def test_popout_open_defaults_false_and_persists(settings, tmp_path):
+    assert settings.popout_open("vitals") is False
+    settings.set_popout_open("vitals", True)
+    assert AppSettings(tmp_path / "settings.ini").popout_open("vitals") is True
+    assert settings.popout_open("skills") is False
+
+
+def test_popout_geometry_round_trip(settings, tmp_path):
+    assert settings.popout_geometry("vitals") is None
+    settings.set_popout_geometry("vitals", QByteArray(b"abc"))
+    assert AppSettings(tmp_path / "settings.ini").popout_geometry("vitals") == QByteArray(b"abc")

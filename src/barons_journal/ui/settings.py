@@ -65,10 +65,13 @@ class AppSettings:
     def follow(self, value: Path | None) -> None:
         self._set_path("follow", value)
 
+    def _bytes(self, key: str) -> QByteArray | None:
+        value = self._q.value(key)
+        return value if isinstance(value, QByteArray) and not value.isEmpty() else None
+
     @property
     def geometry(self) -> QByteArray | None:
-        value = self._q.value("geometry")
-        return value if isinstance(value, QByteArray) and not value.isEmpty() else None
+        return self._bytes("geometry")
 
     @geometry.setter
     def geometry(self, value: QByteArray | None) -> None:
@@ -92,6 +95,18 @@ class AppSettings:
     @notes_visible.setter
     def notes_visible(self, value: bool) -> None:
         self._q.setValue("notes_visible", value)
+
+    def popout_open(self, key: str) -> bool:
+        return self._bool(f"popouts/{key}/open", False)
+
+    def set_popout_open(self, key: str, value: bool) -> None:
+        self._q.setValue(f"popouts/{key}/open", value)
+
+    def popout_geometry(self, key: str) -> QByteArray | None:
+        return self._bytes(f"popouts/{key}/geometry")
+
+    def set_popout_geometry(self, key: str, value: QByteArray) -> None:
+        self._q.setValue(f"popouts/{key}/geometry", value)
 
     def splitter_sizes(self, layout: LayoutName) -> list[int] | None:
         value = self._q.value(f"splitter/{layout}")
