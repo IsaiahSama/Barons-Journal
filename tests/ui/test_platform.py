@@ -1,10 +1,11 @@
 from barons_journal.ui import prefer_xwayland
 
 
-def test_wayland_linux_gets_xcb():
+def test_wayland_linux_prefers_xcb_with_wayland_fallback():
     env = {"WAYLAND_DISPLAY": "wayland-1"}
     prefer_xwayland(env, "linux")
-    assert env["QT_QPA_PLATFORM"] == "xcb"
+    # Qt tries each in order: without a working xcb plugin the app still starts on Wayland.
+    assert env["QT_QPA_PLATFORM"] == "xcb;wayland"
 
 
 def test_explicit_platform_kept():

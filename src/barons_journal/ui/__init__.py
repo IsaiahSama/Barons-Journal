@@ -16,7 +16,7 @@ from .theme import apply_theme
 def prefer_xwayland(environ: MutableMapping[str, str], platform: str) -> None:
     """Use XWayland on Wayland: native Wayland lets no app keep its windows on top."""
     if platform.startswith("linux") and environ.get("WAYLAND_DISPLAY"):
-        environ.setdefault("QT_QPA_PLATFORM", "xcb")
+        environ.setdefault("QT_QPA_PLATFORM", "xcb;wayland")
 
 
 def run() -> int:
