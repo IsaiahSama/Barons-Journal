@@ -157,3 +157,30 @@ def test_popout_window_flags(qtbot, controller):
     assert w.windowType() == Qt.WindowType.Dialog
     assert w.parent() is None
     assert w.windowTitle() == "Vitals · Baron's Journal"
+
+
+def test_map_window_is_frameless_and_translucent(qtbot, controller):
+    from PySide6.QtCore import Qt
+
+    from barons_journal.ui.popouts.manager import PopoutWindow
+    from barons_journal.ui.popouts.map import MapView
+
+    w = PopoutWindow("map", "Map", MapView(controller), frameless=True)
+    qtbot.addWidget(w)
+    assert w.windowFlags() & Qt.WindowType.FramelessWindowHint
+    assert w.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
+    assert w.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert w.windowType() == Qt.WindowType.Dialog
+
+
+def test_map_registered_and_opens_frameless(qtbot, controller, settings):
+    from PySide6.QtCore import Qt
+
+    from barons_journal.ui.popouts.manager import POPOUTS, PopoutManager
+
+    assert POPOUTS[-1] == ("map", "Map")
+    m = PopoutManager(controller, settings)
+    m.set_open("map", True)
+    w = m.window("map")
+    qtbot.addWidget(w)
+    assert w.windowFlags() & Qt.WindowType.FramelessWindowHint

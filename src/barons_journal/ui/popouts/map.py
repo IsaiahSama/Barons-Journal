@@ -7,9 +7,13 @@ from importlib.resources import files
 from importlib.resources.abc import Traversable
 
 from PySide6.QtCore import QPoint, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPalette, QPen
+from PySide6.QtGui import QColor, QIcon, QMouseEvent, QPainter, QPaintEvent, QPalette, QPen, QResizeEvent
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QHBoxLayout, QSizeGrip, QToolButton, QVBoxLayout, QWidget
+
+from ..controller import SessionController
+from ..location import Location
+from ..state import ViewState
 
 MARKER_KINDS: tuple[tuple[str, str], ...] = (
     ("weapon", "Weapon"),
@@ -106,3 +110,69 @@ class MapCanvas(QWidget):
         for i, m in enumerate(self.markers):
             c = self.marker_center(i)
             self._renderers[m.kind].render(p, QRectF(c.x() - half, c.y() - half, MARKER_SIZE, MARKER_SIZE))
+
+
+class _Strip(QWidget):
+    """The top bar: holds the marker buttons and moves the window, which has no title bar."""
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        handle = self.window().windowHandle()
+        if event.button() == Qt.MouseButton.LeftButton and handle is not None:
+            handle.startSystemMove()  # COSMIC ignores move(), so let the compositor do it
+
+
+class MapView(QWidget):
+    def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._location: Location | None = None
+        self.strip = _Strip()
+        self.strip.setAutoFillBackground(True)  # opaque while the window itself is translucent
+        bar = QHBoxLayout(self.strip)
+        bar.setContentsMargins(4, 2, 4, 2)
+        bar.setSpacing(2)
+        self.buttons: dict[str, QToolButton] = {}
+        for kind, label in MARKER_KINDS:
+            b = QToolButton()
+            b.setIcon(QIcon(str(icon_path(kind))))
+            b.setToolTip(label)
+            b.setAccessibleName(label)
+            b.setCheckable(True)
+            b.setAutoRaise(True)
+            b.toggled.connect(lambda on, k=kind: self._arm(k, on))
+            bar.addWidget(b)
+            self.buttons[kind] = b
+        bar.addStretch(1)
+        self.canvas = MapCanvas()
+        self.canvas.placed.connect(self._disarm)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.strip)
+        layout.addWidget(self.canvas, 1)
+        self._grip = QSizeGrip(self)
+        controller.view_changed.connect(self.render)
+
+    def _arm(self, kind: str, on: bool) -> None:
+        if on:
+            for k, b in self.buttons.items():
+                if k != kind:
+                    b.setChecked(False)
+            self.canvas.kind = kind
+        elif self.canvas.kind == kind:
+            self.canvas.kind = None
+
+    def _disarm(self) -> None:
+        if self.canvas.kind is not None:
+            self.buttons[self.canvas.kind].setChecked(False)
+
+    def render(self, view: ViewState) -> None:
+        # The player can't go back to a floor, so its markers go when the floor changes.
+        if view.location != self._location:
+            self.canvas.clear()
+            self._location = view.location
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        hint = self._grip.sizeHint()
+        self._grip.move(self.width() - hint.width(), self.height() - hint.height())
+        self._grip.raise_()

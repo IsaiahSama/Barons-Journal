@@ -248,7 +248,7 @@ def test_no_saves_shows_plain_empty_page(empty_dir_controller, settings, qtbot):
 def test_widget_menu_lists_popouts_in_order(window):
     from barons_journal.ui.popouts.manager import POPOUTS
 
-    assert [k for k, _ in POPOUTS] == ["vitals", "attributes", "skills", "floor_note", "current_floor"]
+    assert [k for k, _ in POPOUTS] == ["vitals", "attributes", "skills", "floor_note", "current_floor", "map"]
     assert all(f"popout_{k}" in window.actions for k, _ in POPOUTS)
 
 

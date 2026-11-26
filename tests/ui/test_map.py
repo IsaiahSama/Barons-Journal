@@ -3,7 +3,9 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtTest import QTest
 
-from barons_journal.ui.popouts.map import MARKER_KINDS, MapCanvas, Marker, icon_path
+from barons_journal.ui.location import Location
+from barons_journal.ui.popouts.map import MARKER_KINDS, MapCanvas, MapView, Marker, icon_path
+from barons_journal.ui.state import ViewState
 
 LEFT, RIGHT = Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton
 
@@ -95,3 +97,50 @@ def test_clear(canvas):
 def test_paints_without_error(canvas):
     canvas.markers = [Marker(k, 0.5, 0.5) for k, _ in MARKER_KINDS]
     assert not canvas.grab().isNull()
+
+
+@pytest.fixture
+def view(qtbot, controller):
+    v = MapView(controller)
+    qtbot.addWidget(v)
+    v.resize(300, 250)
+    v.show()
+    return v
+
+
+def _at(location):
+    return ViewState("live", run=None, save=None, location=location, editable=True)
+
+
+def test_buttons_in_order_with_tooltips(view):
+    assert list(view.buttons) == [k for k, _ in MARKER_KINDS]
+    assert view.buttons["boss"].toolTip() == "Strong enemy"
+    assert view.buttons["key"].toolTip() == "Key"
+
+
+def test_button_arms_and_disarms(view):
+    view.buttons["key"].click()
+    assert view.canvas.kind == "key"
+    view.buttons["chest"].click()
+    assert view.canvas.kind == "chest" and not view.buttons["key"].isChecked()
+    view.buttons["chest"].click()
+    assert view.canvas.kind is None
+
+
+def test_placing_disarms(view):
+    view.buttons["key"].click()
+    QTest.mouseClick(view.canvas, LEFT, pos=QPoint(40, 40))
+    assert len(view.canvas.markers) == 1
+    assert view.canvas.kind is None and not view.buttons["key"].isChecked()
+
+
+def test_floor_change_clears_same_floor_keeps(view):
+    view.render(_at(Location(3)))
+    view.canvas.markers = [Marker("key", 0.5, 0.5)]
+    view.render(_at(Location(3)))
+    assert len(view.canvas.markers) == 1
+    view.render(_at(Location(3, secret=True)))
+    assert view.canvas.markers == []
+    view.canvas.markers = [Marker("key", 0.5, 0.5)]
+    view.render(_at(None))
+    assert view.canvas.markers == []

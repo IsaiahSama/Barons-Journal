@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..controller import SessionController
 from ..settings import AppSettings
+from .map import MapView
 from .views import AttributesView, CurrentFloorView, FloorNoteView, SkillsView, VitalsView
 
 POPOUTS: tuple[tuple[str, str], ...] = (
@@ -18,6 +19,7 @@ POPOUTS: tuple[tuple[str, str], ...] = (
     ("skills", "Skills"),
     ("floor_note", "Floor note"),
     ("current_floor", "Current floor"),
+    ("map", "Map"),
 )
 
 _VIEWS: dict[str, Callable[[SessionController], QWidget]] = {
@@ -26,6 +28,7 @@ _VIEWS: dict[str, Callable[[SessionController], QWidget]] = {
     "skills": SkillsView,
     "floor_note": FloorNoteView,
     "current_floor": CurrentFloorView,
+    "map": MapView,
 }
 
 
@@ -38,8 +41,12 @@ class PopoutWindow(QWidget):
 
     closed = Signal(str)
 
-    def __init__(self, key: str, title: str, content: QWidget) -> None:
-        super().__init__(None, Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint)
+    def __init__(self, key: str, title: str, content: QWidget, frameless: bool = False) -> None:
+        flags = Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+        if frameless:  # the Map: a see-through frame over the game, moved and resized from inside
+            flags |= Qt.WindowType.FramelessWindowHint
+        super().__init__(None, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, frameless)
         self.key = key
         self.content = content
         self.setWindowTitle(f"{title} · Baron's Journal")
@@ -78,7 +85,7 @@ class PopoutManager(QObject):
             return
         w = self._windows.get(key)
         if w is None:
-            w = PopoutWindow(key, self._titles[key], _VIEWS[key](self._controller))
+            w = PopoutWindow(key, self._titles[key], _VIEWS[key](self._controller), frameless=key == "map")
             geometry = self._settings.popout_geometry(key)
             if geometry is not None:
                 w.restoreGeometry(geometry)
