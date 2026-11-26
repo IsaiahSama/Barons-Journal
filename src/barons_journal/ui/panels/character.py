@@ -103,10 +103,11 @@ def make_meters() -> tuple[QProgressBar, QProgressBar]:
 
 
 def set_meters(gold: QProgressBar, hunger: QProgressBar, stats: Stats) -> None:
-    for bar, value in ((gold, stats.gold), (hunger, stats.hunger)):
-        # QProgressBar ignores values above its maximum: cap the bar, show the real number.
-        bar.setValue(min(value, bar.maximum()))
-        bar.setFormat(str(value))
+    # QProgressBar ignores values above its maximum: cap the bar, show the real number.
+    gold.setValue(min(stats.gold, GOLD_FULL))
+    gold.setFormat(str(stats.gold))
+    hunger.setValue(min(stats.hunger, HUNGER_FULL))
+    hunger.setFormat(f"{stats.hunger}/{HUNGER_FULL}")
 
 
 def attribute_rows(stats: Stats) -> tuple[tuple[str, int], ...]:

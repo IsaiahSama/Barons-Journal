@@ -38,7 +38,7 @@ def test_vitals_live(qtbot, controller, sample_save_path):
     assert v.hp_bar.objectName() == "hpBar" and v.mp_bar.objectName() == "mpBar"
     assert v.hp_bar.format() == "%v/%m"
     assert (v.gold_bar.value(), v.gold_bar.maximum(), v.gold_bar.text()) == (0, 10000, "0")
-    assert (v.hunger_bar.value(), v.hunger_bar.maximum(), v.hunger_bar.text()) == (1000, 1000, "1000")
+    assert (v.hunger_bar.value(), v.hunger_bar.maximum(), v.hunger_bar.text()) == (1000, 1000, "1000/1000")
     assert v.gold_bar.objectName() == "goldBar" and v.hunger_bar.objectName() == "hungerBar"
 
 
@@ -48,7 +48,7 @@ def test_vitals_over_the_cap_shows_full_bar_and_real_number(qtbot, controller, s
     save = dataclasses.replace(save, player=dataclasses.replace(save.player, stats=stats))
     v = _view(qtbot, controller, VitalsView, save)
     assert (v.gold_bar.value(), v.gold_bar.text()) == (10000, "12345")
-    assert (v.hunger_bar.value(), v.hunger_bar.text()) == (1000, "1400")
+    assert (v.hunger_bar.value(), v.hunger_bar.text()) == (1000, "1400/1000")
 
 
 def test_attributes_live(qtbot, controller, sample_save_path):
