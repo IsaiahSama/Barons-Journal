@@ -243,3 +243,52 @@ def test_no_saves_shows_plain_empty_page(empty_dir_controller, settings, qtbot):
     w = _make(empty_dir_controller, settings, qtbot)
     assert w.empty_title.text() == "No Barony saves found"
     assert w.empty_error.isHidden()
+
+
+def test_widget_menu_lists_popouts_in_order(window):
+    from barons_journal.ui.popouts.manager import POPOUTS
+
+    assert [k for k, _ in POPOUTS] == ["vitals", "attributes", "skills", "floor_note", "current_floor"]
+    assert all(f"popout_{k}" in window.actions for k, _ in POPOUTS)
+
+
+def test_toggle_opens_and_records(window, settings):
+    window.actions["popout_vitals"].setChecked(True)
+    assert window.popouts.window("vitals").isVisible()
+    assert settings.popout_open("vitals") is True
+    window.actions["popout_vitals"].setChecked(False)
+    assert not window.popouts.window("vitals").isVisible()
+    assert settings.popout_open("vitals") is False
+
+
+def test_closing_widget_unchecks_menu(window, settings):
+    window.actions["popout_skills"].setChecked(True)
+    window.popouts.window("skills").close()
+    assert not window.actions["popout_skills"].isChecked()
+    assert settings.popout_open("skills") is False
+    assert settings.popout_geometry("skills") is not None
+
+
+def test_quit_keeps_widgets_open_for_next_launch(window, settings, controller, qtbot):
+    window.actions["popout_vitals"].setChecked(True)
+    window.close()
+    assert not window.popouts.window("vitals").isVisible()
+    assert settings.popout_open("vitals") is True
+    w2 = MainWindow(controller, settings)
+    qtbot.addWidget(w2)
+    w2.popouts.restore()
+    assert w2.popouts.window("vitals").isVisible()
+    assert w2.actions["popout_vitals"].isChecked()
+    w2.popouts.shutdown()
+
+
+def test_quit_flushes_floor_note_widget(window, controller, monkeypatch):
+    from barons_journal.ui.widgets.note_editor import NoteEditor
+
+    monkeypatch.setattr(NoteEditor, "IDLE_MS", 600_000)
+    window.actions["popout_floor_note"].setChecked(True)
+    editor = window.popouts.window("floor_note").content.editor
+    editor.setFocus()
+    QTest.keyClicks(editor, "from widget")
+    window.close()
+    assert "from widget" in controller.floor_notes(LIVE).values()

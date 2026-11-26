@@ -29,6 +29,7 @@ from .panels.header import HeaderPanel
 from .panels.kills import KillsPanel
 from .panels.notes import NotesPanel
 from .panels.scrolls import ScrollsPanel
+from .popouts.manager import POPOUTS, PopoutManager
 from .settings import AppSettings
 from .state import ViewState
 from .theme import THEMES, apply_theme
@@ -84,8 +85,10 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(main)
         self.setCentralWidget(self.stack)
 
+        self.popouts = PopoutManager(controller, settings)
         self.actions: dict[str, QAction] = {}
         self._build_menus()
+        self.popouts.open_changed.connect(self._on_popout_changed)
 
         self.choose_folder_button.clicked.connect(self._choose_folder)
         controller.view_changed.connect(self._on_view)
@@ -141,6 +144,11 @@ class MainWindow(QMainWindow):
             action.setChecked(visible)
             action.toggled.connect(lambda on, w=which: self.layouts.set_panel_visible(w, on))
             view_menu.addAction(action)
+        widgets_menu = view_menu.addMenu("Widgets")
+        for key, title in POPOUTS:
+            action = self._action(f"popout_{key}", title, checkable=True)
+            action.toggled.connect(lambda on, k=key: self.popouts.set_open(k, on))
+            widgets_menu.addAction(action)
         theme_menu = view_menu.addMenu("Theme")
         theme_group = QActionGroup(self)
         theme_group.setExclusive(True)
@@ -150,6 +158,12 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, n=name: self._apply_theme(n))
             theme_group.addAction(action)
             theme_menu.addAction(action)
+
+    def _on_popout_changed(self, key: str, on: bool) -> None:
+        action = self.actions[f"popout_{key}"]
+        action.blockSignals(True)
+        action.setChecked(on)
+        action.blockSignals(False)
 
     def _apply_layout(self, name) -> None:
         if name != self.layouts.current:
@@ -192,6 +206,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.panels.flush_notes()
+        self.popouts.shutdown()
         self._settings.geometry = self.saveGeometry()
         self.layouts.save_sizes()
         event.accept()

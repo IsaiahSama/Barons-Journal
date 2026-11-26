@@ -131,3 +131,16 @@ def test_current_floor_secret_level(qtbot, controller, journal, secret_save):
     v._on_view(ViewState("live", run=run, save=secret_save, location=loc, editable=True))
     assert loc.secret
     assert _visible_rows(v) == [v.model.row_of(loc)]
+
+
+def test_popout_window_flags(qtbot, controller):
+    from PySide6.QtCore import Qt
+
+    from barons_journal.ui.popouts.manager import PopoutWindow
+
+    w = PopoutWindow("vitals", "Vitals", VitalsView(controller))
+    qtbot.addWidget(w)
+    assert w.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
+    assert w.windowType() == Qt.WindowType.Dialog
+    assert w.parent() is None
+    assert w.windowTitle() == "Vitals · Baron's Journal"

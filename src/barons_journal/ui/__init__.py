@@ -39,4 +39,5 @@ def run() -> int:
             window.showMaximized()
         else:
             window.show()
+        window.popouts.restore()
         return app.exec()
