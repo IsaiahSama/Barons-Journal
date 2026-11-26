@@ -81,6 +81,7 @@ class MapCanvas(QWidget):
         if event.button() == Qt.MouseButton.RightButton:
             if hit is not None:
                 del self.markers[hit]
+                self._dragging = None  # its index may now point past the end, or at another marker
                 self.update()
         elif event.button() == Qt.MouseButton.LeftButton:
             if hit is not None:
@@ -124,7 +125,7 @@ class _Strip(QWidget):
 class MapView(QWidget):
     def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._location: Location | None = None
+        self._floor: tuple[int | None, Location | None] = (None, None)
         self.strip = _Strip()
         self.strip.setAutoFillBackground(True)  # opaque while the window itself is translucent
         bar = QHBoxLayout(self.strip)
@@ -151,6 +152,7 @@ class MapView(QWidget):
         layout.addWidget(self.canvas, 1)
         self._grip = QSizeGrip(self)
         controller.view_changed.connect(self.render)
+        self.render(controller.view())
 
     def _arm(self, kind: str, on: bool) -> None:
         if on:
@@ -166,10 +168,14 @@ class MapView(QWidget):
             self.buttons[self.canvas.kind].setChecked(False)
 
     def render(self, view: ViewState) -> None:
-        # The player can't go back to a floor, so its markers go when the floor changes.
-        if view.location != self._location:
+        # The player can't go back to a floor, so its markers go when the floor (or run) changes.
+        # Browsing a past run leaves the live floor's markers alone.
+        if view.mode == "past":
+            return
+        floor = (view.run.gamekey if view.run else None, view.location)
+        if floor != self._floor:
             self.canvas.clear()
-            self._location = view.location
+            self._floor = floor
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)

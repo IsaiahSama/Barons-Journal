@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtTest import QTest
 
+from barons_journal.journal import Run
 from barons_journal.ui.location import Location
 from barons_journal.ui.popouts.map import MARKER_KINDS, MapCanvas, MapView, Marker, icon_path
 from barons_journal.ui.state import ViewState
@@ -108,8 +111,13 @@ def view(qtbot, controller):
     return v
 
 
-def _at(location):
-    return ViewState("live", run=None, save=None, location=location, editable=True)
+def _run(gamekey):
+    now = datetime(2026, 11, 25)
+    return Run(gamekey, "Hero", 0, 0, 1, False, now, now)
+
+
+def _at(location, gamekey=1, mode="live"):
+    return ViewState(mode, run=_run(gamekey), save=None, location=location, editable=mode == "live")
 
 
 def test_buttons_in_order_with_tooltips(view):
@@ -144,3 +152,35 @@ def test_floor_change_clears_same_floor_keeps(view):
     view.canvas.markers = [Marker("key", 0.5, 0.5)]
     view.render(_at(None))
     assert view.canvas.markers == []
+
+
+def test_opening_mid_session_keeps_first_markers(qtbot, controller, monkeypatch):
+    monkeypatch.setattr(controller, "view", lambda: _at(Location(3)))
+    v = MapView(controller)
+    qtbot.addWidget(v)
+    v.canvas.markers = [Marker("key", 0.5, 0.5)]
+    v.render(_at(Location(3)))
+    assert len(v.canvas.markers) == 1
+
+
+def test_viewing_past_run_keeps_live_markers(view):
+    view.render(_at(Location(3)))
+    view.canvas.markers = [Marker("key", 0.5, 0.5)]
+    view.render(_at(Location(7), gamekey=2, mode="past"))
+    view.render(_at(Location(3)))
+    assert len(view.canvas.markers) == 1
+
+
+def test_new_run_on_same_floor_clears(view):
+    view.render(_at(Location(1), gamekey=1))
+    view.canvas.markers = [Marker("key", 0.5, 0.5)]
+    view.render(_at(Location(1), gamekey=2))
+    assert view.canvas.markers == []
+
+
+def test_right_click_mid_drag_does_not_crash(canvas):
+    canvas.markers = [Marker("key", 0.25, 0.25)]
+    QTest.mousePress(canvas, LEFT, pos=QPoint(50, 25))
+    QTest.mousePress(canvas, RIGHT, pos=QPoint(50, 25))
+    QTest.mouseMove(canvas, QPoint(150, 75))
+    assert canvas.markers == []
