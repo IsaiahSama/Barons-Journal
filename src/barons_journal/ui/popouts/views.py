@@ -20,7 +20,16 @@ from ..controller import SessionController
 from ..location import Location, location_label
 from ..panels.floors import FloorsModel
 from ..panels._stats import StatsPanel
-from ..panels.character import attribute_rows, fill_table, make_bars, make_table, set_bars, skill_rows
+from ..panels.character import (
+    attribute_rows,
+    fill_table,
+    make_bars,
+    make_meters,
+    make_table,
+    set_bars,
+    set_meters,
+    skill_rows,
+)
 from ..state import ViewState
 from ..widgets.note_editor import NoteEditor
 
@@ -38,21 +47,19 @@ class VitalsView(StatsPanel):
     def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
         super().__init__(controller, parent)
         self.hp_bar, self.mp_bar = make_bars()
-        self.gold_label = QLabel()
-        self.hunger_label = QLabel()
+        self.gold_bar, self.hunger_bar = make_meters()
         content = QWidget()
         form = QFormLayout(content)
         form.addRow("HP", self.hp_bar)
         form.addRow("MP", self.mp_bar)
-        form.addRow("Gold", self.gold_label)
-        form.addRow("Hunger", self.hunger_label)
+        form.addRow("Gold", self.gold_bar)
+        form.addRow("Hunger", self.hunger_bar)
         self._init_stack(content)
 
     def _render_live(self, save: SaveFile) -> None:
         stats = save.player.stats
         set_bars(self.hp_bar, self.mp_bar, stats)
-        self.gold_label.setText(str(stats.gold))
-        self.hunger_label.setText(str(stats.hunger))
+        set_meters(self.gold_bar, self.hunger_bar, stats)
 
 
 class AttributesView(StatsPanel):

@@ -88,6 +88,27 @@ def set_bars(hp: QProgressBar, mp: QProgressBar, stats: Stats) -> None:
     mp.setValue(stats.mp)
 
 
+GOLD_FULL = 10000
+HUNGER_FULL = 1000
+
+
+def make_meters() -> tuple[QProgressBar, QProgressBar]:
+    """Gold and hunger bars (object names goldBar/hungerBar)."""
+    gold, hunger = QProgressBar(), QProgressBar()
+    gold.setObjectName("goldBar")
+    hunger.setObjectName("hungerBar")
+    gold.setMaximum(GOLD_FULL)
+    hunger.setMaximum(HUNGER_FULL)
+    return gold, hunger
+
+
+def set_meters(gold: QProgressBar, hunger: QProgressBar, stats: Stats) -> None:
+    for bar, value in ((gold, stats.gold), (hunger, stats.hunger)):
+        # QProgressBar ignores values above its maximum: cap the bar, show the real number.
+        bar.setValue(min(value, bar.maximum()))
+        bar.setFormat(str(value))
+
+
 def attribute_rows(stats: Stats) -> tuple[tuple[str, int], ...]:
     return (
         ("STR", stats.strength),
@@ -108,8 +129,7 @@ class CharacterPanel(StatsPanel):
         super().__init__(controller, parent)
         self.hp_bar, self.mp_bar = make_bars()
         self.level_label = QLabel()
-        self.gold_label = QLabel()
-        self.hunger_label = QLabel()
+        self.gold_bar, self.hunger_bar = make_meters()
         self.attributes = make_table(2, 6)
         self.skills = make_table(2, 0)
         self.equipment = make_table(2, len(Equipment.slot_names()))
@@ -121,8 +141,8 @@ class CharacterPanel(StatsPanel):
         form.addRow("HP", self.hp_bar)
         form.addRow("MP", self.mp_bar)
         form.addRow("Level", self.level_label)
-        form.addRow("Gold", self.gold_label)
-        form.addRow("Hunger", self.hunger_label)
+        form.addRow("Gold", self.gold_bar)
+        form.addRow("Hunger", self.hunger_bar)
         form.addRow(self.attributes)
         form.addRow(_section("Skills"))
         form.addRow(self.skills)
@@ -144,8 +164,7 @@ class CharacterPanel(StatsPanel):
         stats = player.stats
         set_bars(self.hp_bar, self.mp_bar, stats)
         self.level_label.setText(f"{stats.level} ({stats.exp} exp)")
-        self.gold_label.setText(str(stats.gold))
-        self.hunger_label.setText(str(stats.hunger))
+        set_meters(self.gold_bar, self.hunger_bar, stats)
         fill_table(self.attributes, attribute_rows(stats))
         fill_table(self.skills, skill_rows(stats))
         fill_table(

@@ -23,6 +23,7 @@ GOLD = "#e0a33a"
 GOLD_DARK = "#8c5f1c"
 HP_RED = "#c0392b"
 MP_BLUE = "#3b6fd1"
+HUNGER_BROWN = "#7a4a24"
 
 
 def _palette() -> QPalette:
@@ -118,6 +119,8 @@ QProgressBar {{
 QProgressBar::chunk {{ border-radius: 2px; }}
 QProgressBar#hpBar::chunk {{ background: {HP_RED}; }}
 QProgressBar#mpBar::chunk {{ background: {MP_BLUE}; }}
+QProgressBar#goldBar::chunk {{ background: {GOLD}; }}
+QProgressBar#hungerBar::chunk {{ background: {HUNGER_BROWN}; }}
 
 QLabel#runTitle {{ color: {GOLD}; font-size: 14pt; font-weight: bold; }}
 QLabel[role="section"] {{ color: {GOLD}; font-weight: bold; padding-top: 6px; }}

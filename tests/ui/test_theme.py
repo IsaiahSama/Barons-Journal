@@ -28,6 +28,8 @@ def test_barony_theme_sets_palette_and_stylesheet(app):
     assert app.palette().color(QPalette.ColorRole.Window) == QColor(theme.STONE)
     assert app.palette().color(QPalette.ColorRole.Text) == QColor(theme.PARCHMENT)
     assert "hpBar" in app.styleSheet()
+    assert "QProgressBar#hungerBar::chunk" in app.styleSheet()
+    assert "QProgressBar#goldBar::chunk" in app.styleSheet()
 
 
 def test_system_theme_clears_stylesheet(app):

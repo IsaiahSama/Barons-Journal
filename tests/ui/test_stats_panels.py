@@ -39,6 +39,8 @@ def test_character_sample(qtbot, controller, sample_save_path):
     assert (panel.hp_bar.value(), panel.hp_bar.maximum()) == (30, 30)
     assert (panel.mp_bar.value(), panel.mp_bar.maximum()) == (20, 20)
     assert panel.hp_bar.format() == "%v/%m"
+    assert (panel.gold_bar.value(), panel.gold_bar.maximum()) == (0, 10000)
+    assert (panel.hunger_bar.value(), panel.hunger_bar.maximum()) == (1000, 1000)
     assert panel.skills.rowCount() == 16
     equipment = {
         panel.equipment.item(r, 0).text(): panel.equipment.item(r, 1).text()
