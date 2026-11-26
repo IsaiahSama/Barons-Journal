@@ -184,3 +184,10 @@ def test_right_click_mid_drag_does_not_crash(canvas):
     QTest.mousePress(canvas, RIGHT, pos=QPoint(50, 25))
     QTest.mouseMove(canvas, QPoint(150, 75))
     assert canvas.markers == []
+
+
+def test_clear_button_removes_all_markers(view):
+    view.canvas.markers = [Marker("key", 0.5, 0.5), Marker("chest", 0.2, 0.2)]
+    view.clear_button.click()
+    assert view.canvas.markers == []
+    assert view.clear_button.toolTip() == "Clear markers"
