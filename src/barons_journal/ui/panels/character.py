@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...data import SaveFile
+from ...data import SaveFile, Stats
 from ...data.models import Effect, Equipment
 from ._stats import StatsPanel
 
@@ -38,7 +38,7 @@ def effect_text(effect: Effect) -> str:
     return f"{effect.name}{tier} ({left})"
 
 
-def _table(columns: int, rows: int) -> QTableWidget:
+def make_table(columns: int, rows: int) -> QTableWidget:
     table = QTableWidget(rows, columns)
     table.horizontalHeader().setVisible(False)
     table.verticalHeader().setVisible(False)
@@ -62,21 +62,57 @@ def _fit_height(table: QTableWidget) -> None:
     table.setFixedHeight(rows + 2 * table.frameWidth())
 
 
+def fill_table(table: QTableWidget, rows: tuple[tuple[str, object], ...]) -> None:
+    table.setRowCount(len(rows))
+    for r, (key, value) in enumerate(rows):
+        table.setItem(r, 0, QTableWidgetItem(key))
+        table.setItem(r, 1, QTableWidgetItem(str(value)))
+    table.resizeColumnToContents(0)
+    table.resizeRowsToContents()
+    _fit_height(table)
+
+
+def make_bars() -> tuple[QProgressBar, QProgressBar]:
+    hp, mp = QProgressBar(), QProgressBar()
+    hp.setObjectName("hpBar")
+    mp.setObjectName("mpBar")
+    for bar in (hp, mp):
+        bar.setFormat("%v/%m")
+    return hp, mp
+
+
+def set_bars(hp: QProgressBar, mp: QProgressBar, stats: Stats) -> None:
+    hp.setMaximum(stats.max_hp)
+    hp.setValue(stats.hp)
+    mp.setMaximum(stats.max_mp)
+    mp.setValue(stats.mp)
+
+
+def attribute_rows(stats: Stats) -> tuple[tuple[str, int], ...]:
+    return (
+        ("STR", stats.strength),
+        ("DEX", stats.dexterity),
+        ("CON", stats.constitution),
+        ("INT", stats.intelligence),
+        ("PER", stats.perception),
+        ("CHR", stats.charisma),
+    )
+
+
+def skill_rows(stats: Stats) -> tuple[tuple[str, int], ...]:
+    return tuple(stats.proficiencies_by_name.items())
+
+
 class CharacterPanel(StatsPanel):
     def __init__(self, controller: SessionController, parent: QWidget | None = None) -> None:
         super().__init__(controller, parent)
-        self.hp_bar = QProgressBar()
-        self.mp_bar = QProgressBar()
-        self.hp_bar.setObjectName("hpBar")
-        self.mp_bar.setObjectName("mpBar")
-        for bar in (self.hp_bar, self.mp_bar):
-            bar.setFormat("%v/%m")
+        self.hp_bar, self.mp_bar = make_bars()
         self.level_label = QLabel()
         self.gold_label = QLabel()
         self.hunger_label = QLabel()
-        self.attributes = _table(2, 6)
-        self.skills = _table(2, 0)
-        self.equipment = _table(2, len(Equipment.slot_names()))
+        self.attributes = make_table(2, 6)
+        self.skills = make_table(2, 0)
+        self.equipment = make_table(2, len(Equipment.slot_names()))
         self.effects_label = QLabel()
         self.effects_label.setWordWrap(True)
 
@@ -106,24 +142,13 @@ class CharacterPanel(StatsPanel):
     def _render_live(self, save: SaveFile) -> None:
         player = save.player
         stats = player.stats
-        self.hp_bar.setMaximum(stats.max_hp)
-        self.hp_bar.setValue(stats.hp)
-        self.mp_bar.setMaximum(stats.max_mp)
-        self.mp_bar.setValue(stats.mp)
+        set_bars(self.hp_bar, self.mp_bar, stats)
         self.level_label.setText(f"{stats.level} ({stats.exp} exp)")
         self.gold_label.setText(str(stats.gold))
         self.hunger_label.setText(str(stats.hunger))
-        attributes = (
-            ("STR", stats.strength),
-            ("DEX", stats.dexterity),
-            ("CON", stats.constitution),
-            ("INT", stats.intelligence),
-            ("PER", stats.perception),
-            ("CHR", stats.charisma),
-        )
-        self._fill(self.attributes, attributes)
-        self._fill(self.skills, tuple(stats.proficiencies_by_name.items()))
-        self._fill(
+        fill_table(self.attributes, attribute_rows(stats))
+        fill_table(self.skills, skill_rows(stats))
+        fill_table(
             self.equipment,
             tuple(
                 (slot.capitalize(), item.name if item is not None else "—")
@@ -132,13 +157,3 @@ class CharacterPanel(StatsPanel):
         )
         visible = [effect_text(e) for e in player.effects if not e.hidden]
         self.effects_label.setText("\n".join(visible) if visible else "No active effects")
-
-    @staticmethod
-    def _fill(table: QTableWidget, rows: tuple[tuple[str, object], ...]) -> None:
-        table.setRowCount(len(rows))
-        for r, (key, value) in enumerate(rows):
-            table.setItem(r, 0, QTableWidgetItem(key))
-            table.setItem(r, 1, QTableWidgetItem(str(value)))
-        table.resizeColumnToContents(0)
-        table.resizeRowsToContents()
-        _fit_height(table)
